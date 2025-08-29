@@ -1,189 +1,191 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <meta charset="utf-8">
-  <title>Vegetation Mapper</title>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
-  <style>
-    body, html { margin:0; padding:0; height:100%; font-family:sans-serif; }
-    #map { height:100%; width:100%; }
-    #controls {
-      position:absolute; top:10px; left:10px; z-index:1001;
-      background:rgba(255,255,255,0.95); padding:8px; border-radius:6px;
-      display:flex; flex-direction:column; gap:6px; max-width:180px;
-    }
-    #legend {
-      position:absolute; bottom:10px; left:10px; z-index:1001;
-      background:rgba(255,255,255,0.95); padding:8px; border-radius:6px;
-    }
-    #gpsDisplay {
-      position:absolute; bottom:10px; right:10px; z-index:1001;
-      background:rgba(255,255,255,0.95); padding:8px; border-radius:6px; text-align:right;
-    }
-    button { padding:8px; font-size:14px; cursor:pointer; }
-    .catActive { box-shadow: inset 0 0 0 2px rgba(0,0,0,0.2); }
-    #recordingIndicator { color:red; font-weight:bold; display:none; margin-top:4px; }
-  </style>
+<meta charset="utf-8">
+<title>Vegetation Mapper</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+<style>
+  body, html { margin:0; padding:0; height:100%; font-family:sans-serif; }
+  #map { height:100%; width:100%; }
+  #controls { position:absolute; top:10px; left:10px; z-index:1001;
+    background:rgba(255,255,255,0.95); padding:8px; border-radius:6px;
+    display:flex; flex-direction:column; gap:6px; max-width:180px; }
+  #legend { position:absolute; bottom:10px; left:10px; z-index:1001;
+    background:rgba(255,255,255,0.95); padding:8px; border-radius:6px; }
+  #gpsDisplay { position:absolute; bottom:10px; right:10px; z-index:1001;
+    background:rgba(255,255,255,0.95); padding:8px; border-radius:6px; text-align:right; }
+  button { padding:8px; font-size:14px; cursor:pointer; }
+  .catActive { box-shadow: inset 0 0 0 2px rgba(0,0,0,0.2); }
+  #recordingIndicator { color:red; font-weight:bold; display:none; margin-top:4px; }
+</style>
 </head>
 <body>
-  <div id="map"></div>
-
-  <div id="controls">
-    <button data-cat="light" id="btn-light">Light</button>
-    <button data-cat="moderate" id="btn-moderate">Moderate</button>
-    <button data-cat="heavy" id="btn-heavy">Heavy</button>
-    <button data-cat="dead" id="btn-dead">Dead Tree</button>
-    <button data-cat="clear" id="btn-clear">Clear</button>
-
-    <button id="followBtn">Follow GPS: OFF</button>
-    <button id="locationBtn">Show Location: OFF</button>
-    <button id="startBtn">Start</button>
-    <button id="stopBtn">Stop</button>
-    <button id="clearLastBtn">Clear Last</button>
-    <button id="exportBtn">Export (lines + points)</button>
-    <div id="recordingIndicator">● Recording...</div>
+<div id="map"></div>
+<div id="controls">
+  <button data-cat="light" id="btn-light">Light</button>
+  <button data-cat="moderate" id="btn-moderate">Moderate</button>
+  <button data-cat="heavy" id="btn-heavy">Heavy</button>
+  <button data-cat="dead" id="btn-dead">Dead Tree</button>
+  <button data-cat="clear" id="btn-clear">Clear</button>
+  <button id="followBtn">Follow GPS: OFF</button>
+  <button id="locationBtn">Show Location: OFF</button>
+  <button id="startBtn">Start</button>
+  <button id="stopBtn">Stop</button>
+  <button id="clearLastBtn">Clear Last</button>
+  <button id="exportBtn">Export (lines + points)</button>
+  <div id="recordingIndicator">● Recording...</div>
+</div>
+<div id="legend">
+  <div><strong>Legend</strong></div>
+  <div style="color:green">■ Light</div>
+  <div style="color:orange">■ Moderate</div>
+  <div style="color:red">■ Heavy</div>
+  <div style="color:black">■ Dead Tree (point)</div>
+  <div style="color:blue">■ Clear</div>
+  <div style="margin-top:6px;font-size:12px">
+    Keys: L M H D C • S start • T stop • O loc • F follow • K clear last • E export
   </div>
+</div>
+<div id="gpsDisplay">
+  <div id="coords">Lat: --, Lng: --</div>
+  <div id="distanceDisplay">Total: 0.00 mi</div>
+</div>
 
-  <div id="legend">
-    <div><strong>Legend</strong></div>
-    <div style="color:green">■ Light</div>
-    <div style="color:orange">■ Moderate</div>
-    <div style="color:red">■ Heavy</div>
-    <div style="color:black">■ Dead Tree (point)</div>
-    <div style="color:blue">■ Clear</div>
-    <div style="margin-top:6px;font-size:12px">
-      Keys: L M H D C • S start • T stop • O loc • F follow • K clear last • E export
-    </div>
-  </div>
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<script>
+// --- Category colors ---
+const CAT_INFO={light:{color:"green",label:"Light"},moderate:{color:"orange",label:"Moderate"},heavy:{color:"red",label:"Heavy"},dead:{color:"black",label:"Dead Tree"},clear:{color:"blue",label:"Clear"}};
 
-  <div id="gpsDisplay">
-    <div id="coords">Lat: --, Lng: --</div>
-    <div id="distanceDisplay">Total: 0.00 mi</div>
-  </div>
+// --- Map setup ---
+const map=L.map('map').setView([44.809,-68.885],13);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(map);
 
-  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-  <script>
-  const CAT_INFO = {
-    light:    { color: "green",   label: "Light" },
-    moderate: { color: "orange",  label: "Moderate" },
-    heavy:    { color: "red",     label: "Heavy" },
-    dead:     { color: "black",   label: "Dead Tree" },
-    clear:    { color: "blue",    label: "Clear" }
-  };
+// --- State ---
+let currentCategory='light',recording=false,currentLine=null,segments=[],watchId=null,followGPS=false;
+let locationWatchId=null,locationMarker=null;
+const distanceTracker={light:0,moderate:0,heavy:0,clear:0};
+let centeredOnce=false;
 
-  const map = L.map('map').setView([44.809, -68.885], 13);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
+// --- Utilities ---
+function toMilesMeters(d){return d/1000*0.621371;}
+function distanceBetween(a,b){
+  const R=6371e3,toRad=d=>d*Math.PI/180;
+  const φ1=toRad(a[0]),φ2=toRad(b[0]);
+  const Δφ=toRad(b[0]-a[0]),Δλ=toRad(b[1]-a[1]);
+  const h=Math.sin(Δφ/2)**2+Math.cos(φ1)*Math.cos(φ2)*Math.sin(Δλ/2)**2;
+  return toMilesMeters(2*R*Math.atan2(Math.sqrt(h),Math.sqrt(1-h)));
+}
+function updateGPSDisplay(lat,lng){
+  document.getElementById('coords').innerText=`Lat: ${lat.toFixed(5)}, Lng: ${lng.toFixed(5)}`;
+  if(followGPS) map.setView([lat,lng],map.getZoom());
+  if(!centeredOnce){ map.setView([lat,lng],16); centeredOnce=true; }
+}
+function totalDistanceMiles(){ return Object.values(distanceTracker).reduce((a,b)=>a+b,0); }
+function updateDistanceDisplay(){ document.getElementById('distanceDisplay').innerText=`Total: ${totalDistanceMiles().toFixed(2)} mi`; }
+function highlightCategory(){
+  document.querySelectorAll('#controls button[data-cat]').forEach(b=>b.classList.remove('catActive'));
+  const btn=document.querySelector(`#controls button[data-cat="${currentCategory}"]`);
+  if(btn)btn.classList.add('catActive');
+}
 
-  let currentCategory = 'light';
-  let recording = false;
-  let currentLine = null;
-  let segments = [];
-  let watchId = null;
-  let followGPS = false;
-
-  let locationWatchId = null;
-  let locationMarker = null;
-
-  const distanceTracker = { light:0, moderate:0, heavy:0, clear:0 };
-
-  function toMilesMeters(distanceMeters){ return (distanceMeters/1000)*0.621371; }
-
-  function distanceBetween(a,b){
-    const R = 6371e3;
-    const toRad = d => d*Math.PI/180;
-    const φ1 = toRad(a[0]), φ2 = toRad(b[0]);
-    const Δφ = toRad(b[0]-a[0]), Δλ = toRad(b[1]-a[1]);
-    const sinHalfΔφ = Math.sin(Δφ/2), sinHalfΔλ = Math.sin(Δλ/2);
-    const h = sinHalfΔφ*sinHalfΔφ + Math.cos(φ1)*Math.cos(φ2)*sinHalfΔλ*sinHalfΔλ;
-    const d = 2 * R * Math.atan2(Math.sqrt(h), Math.sqrt(1-h));
-    return toMilesMeters(d);
-  }
-
-  function updateGPSDisplay(lat,lng){
-    document.getElementById('coords').innerText = `Lat: ${lat.toFixed(5)}, Lng: ${lng.toFixed(5)}`;
-    if(followGPS) map.setView([lat,lng], map.getZoom());
-    if(!centeredOnce){ map.setView([lat,lng],16); centeredOnce=true; }
-  }
-
-  function totalDistanceMiles(){ return Object.values(distanceTracker).reduce((a,b)=>a+b,0); }
-
-  function updateDistanceDisplay(){
-    document.getElementById('distanceDisplay').innerText = `Total: ${totalDistanceMiles().toFixed(2)} mi`;
-  }
-
-  function highlightCategory(){
-    document.querySelectorAll('#controls button[data-cat]').forEach(b=>b.classList.remove('catActive'));
-    const btn = document.querySelector(`#controls button[data-cat="${currentCategory}"]`);
-    if(btn) btn.classList.add('catActive');
-  }
-
-  document.querySelectorAll('#controls button[data-cat]').forEach(btn=>{
-    btn.addEventListener('click', ()=>{
-      const cat = btn.dataset.cat;
-      currentCategory = cat;
-      highlightCategory();
-      if(watchId){
-        endSegment();
-        if(currentCategory !== 'dead') startSegment(currentCategory);
-      }
-    });
+// --- Category selection ---
+document.querySelectorAll('#controls button[data-cat]').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    currentCategory=btn.dataset.cat;
+    highlightCategory();
+    if(watchId){ endSegment(); if(currentCategory!=='dead') startSegment(currentCategory);}
   });
-  highlightCategory();
+});
+highlightCategory();
 
-  function startSegment(cat){
-    if(cat==='dead') return;
-    const poly = L.polyline([], { color: CAT_INFO[cat].color, weight:5 }).addTo(map);
-    currentLine = { category: cat, coords: [], polyline: poly, tStart: new Date().toISOString(), tEnd: null };
-    segments.push(currentLine);
-    attachDeleteHandler(currentLine);
-  }
+// --- Segment functions ---
+function startSegment(cat){
+  if(cat==='dead') return;
+  const poly=L.polyline([], {color:CAT_INFO[cat].color,weight:5}).addTo(map);
+  currentLine={category:cat,coords:[],polyline:poly,tStart:new Date().toISOString(),tEnd:null};
+  segments.push(currentLine);
+  attachDeleteHandler(currentLine);
+}
+function endSegment(){ if(currentLine){currentLine.tEnd=new Date().toISOString(); currentLine=null; saveSegments();} }
 
-  function endSegment(){
-    if(currentLine){ currentLine.tEnd=new Date().toISOString(); currentLine=null; saveSegments(); }
-  }
+// --- Delete handlers ---
+function attachDeleteHandler(item){
+  if(item.polyline)item.polyline.on('click',()=>{if(confirm('Delete this line?')){map.removeLayer(item.polyline); if(item.coords.length>1){let d=0;for(let i=1;i<item.coords.length;i++)d+=distanceBetween(item.coords[i-1],item.coords[i]); distanceTracker[item.category]=Math.max(0,(distanceTracker[item.category]||0)-d); updateDistanceDisplay();}segments=segments.filter(s=>s!==item);saveSegments();}});
+  if(item.marker)item.marker.on('click',()=>{if(confirm('Delete this dead-tree marker?')){map.removeLayer(item.marker);segments=segments.filter(s=>s!==item);saveSegments();}});
+}
 
-  function attachDeleteHandler(item){
-    if(item.polyline) item.polyline.on('click',()=>{ if(confirm('Delete this line?')){ map.removeLayer(item.polyline); if(item.coords.length>1){ let d=0; for(let i=1;i<item.coords.length;i++) d+=distanceBetween(item.coords[i-1],item.coords[i]); distanceTracker[item.category]=Math.max(0,(distanceTracker[item.category]||0)-d); updateDistanceDisplay(); } segments=segments.filter(s=>s!==item); saveSegments(); } });
-    if(item.marker) item.marker.on('click',()=>{ if(confirm('Delete this dead-tree marker?')){ map.removeLayer(item.marker); segments=segments.filter(s=>s!==item); saveSegments(); } });
-  }
+// --- Dead tree ---
+function placeDeadTree(lat,lng){
+  const marker=L.circleMarker([lat,lng],{color:'black',radius:7,fillOpacity:0.9}).addTo(map);
+  const seg={category:'dead',coords:[[lat,lng]],marker:marker,t:new Date().toISOString()};
+  segments.push(seg);
+  attachDeleteHandler(seg);
+  saveSegments();
+}
 
-  function placeDeadTree(lat,lng){
-    const marker = L.circleMarker([lat,lng],{ color:'black', radius:7, fillOpacity:0.9 }).addTo(map);
-    const seg = { category:'dead', coords:[[lat,lng]], marker:marker, t:new Date().toISOString() };
-    segments.push(seg);
-    attachDeleteHandler(seg);
-    saveSegments();
-  }
+// --- Recording ---
+function startRecording(){
+  if(watchId)return;
+  currentLine=null;
+  if(currentCategory!=='dead') startSegment(currentCategory);
+  document.getElementById('recordingIndicator').style.display='block';
+  watchId=navigator.geolocation.watchPosition(pos=>{
+    const lat=pos.coords.latitude,lng=pos.coords.longitude;
+    updateGPSDisplay(lat,lng);
+    if(currentCategory==='dead'){ placeDeadTree(lat,lng); return; }
+    if(!currentLine) startSegment(currentCategory);
+    const coords=currentLine.coords;
+    if(coords.length>0){ const d=distanceBetween(coords[coords.length-1],[lat,lng]); distanceTracker[currentLine.category]+=(d||0); updateDistanceDisplay();}
+    coords.push([lat,lng]);
+    currentLine.polyline.addLatLng([lat,lng]);
+    currentLine.tEnd=new Date().toISOString();
+  },err=>console.log(err),{enableHighAccuracy:true,maximumAge:1000,timeout:10000});
+}
+function stopRecording(){
+  if(watchId){navigator.geolocation.clearWatch(watchId);watchId=null;}
+  endSegment(); currentLine=null;
+  document.getElementById('recordingIndicator').style.display='none';
+}
 
-  function startRecording(){
-    if(watchId) return;
-    currentLine=null;
-    if(currentCategory!=='dead') startSegment(currentCategory);
-    document.getElementById('recordingIndicator').style.display='block';
+// --- Buttons ---
+document.getElementById('startBtn').addEventListener('click',()=>{if(!('geolocation'in navigator)){alert('Geolocation not supported');return;} recording=true; startRecording();});
+document.getElementById('stopBtn').addEventListener('click',()=>{recording=false; stopRecording();});
+document.getElementById('followBtn').addEventListener('click',()=>{followGPS=!followGPS;document.getElementById('followBtn').innerText=`Follow GPS: ${followGPS?'ON':'OFF'}`;});
+document.getElementById('locationBtn').addEventListener('click',()=>{
+  if(locationWatchId){navigator.geolocation.clearWatch(locationWatchId);locationWatchId=null;if(locationMarker){map.removeLayer(locationMarker);locationMarker=null;} document.getElementById('locationBtn').innerText='Show Location: OFF'; return;}
+  locationWatchId=navigator.geolocation.watchPosition(pos=>{
+    const lat=pos.coords.latitude,lng=pos.coords.longitude;
+    if(!locationMarker) locationMarker=L.circleMarker([lat,lng],{radius:6,color:'blue',fillColor:'blue',fillOpacity:0.8}).addTo(map);
+    else locationMarker.setLatLng([lat,lng]);
+    updateGPSDisplay(lat,lng);
+    if(followGPS) map.setView([lat,lng], map.getZoom());
+  },err=>console.log(err),{enableHighAccuracy:true,maximumAge:1000,timeout:10000});
+  document.getElementById('locationBtn').innerText='Show Location: ON';
+});
+document.getElementById('clearLastBtn').addEventListener('click',()=>{
+  const last=segments.pop(); if(!last) return;
+  if(last.polyline) map.removeLayer(last.polyline);
+  if(last.marker) map.removeLayer(last.marker);
+  if(last.coords.length>1 && last.category!=='dead'){let d=0;for(let i=1;i<last.coords.length;i++)d+=distanceBetween(last.coords[i-1],last.coords[i]); distanceTracker[last.category]=Math.max(0,(distanceTracker[last.category]||0)-d);}
+  updateDistanceDisplay(); saveSegments();
+});
+document.getElementById('exportBtn').addEventListener('click',()=>{
+  const lines={type:"FeatureCollection",features:[]}, points={type:"FeatureCollection",features:[]};
+  segments.forEach(s=>{
+    if(s.polyline && s.coords.length>=2) lines.features.push({type:"Feature",properties:{category:s.category,tStart:s.tStart,tEnd:s.tEnd},geometry:{type:"LineString",coordinates:s.coords.map(c=>[c[1],c[0]])}});
+    else if(s.marker || (s.coords.length===1 && s.category==='dead')){const c=s.coords[0]; points.features.push({type:"Feature",properties:{category:'dead',t:s.t||s.tStart},geometry:{type:"Point",coordinates:[c[1],c[0]]}});}
+  });
+  const out={lines,points}, blob=new Blob([JSON.stringify(out,null,2)],{type:"application/json"});
+  const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='vegetation_export.json'; a.click(); URL.revokeObjectURL(url);
+});
 
-    watchId=navigator.geolocation.watchPosition(pos=>{
-      const lat=pos.coords.latitude, lng=pos.coords.longitude;
-      updateGPSDisplay(lat,lng);
-
-      if(currentCategory==='dead'){ placeDeadTree(lat,lng); saveSegments(); return; }
-
-      if(!currentLine) startSegment(currentCategory);
-      const coords = currentLine.coords;
-      if(coords.length>0){ const d = distanceBetween(coords[coords.length-1],[lat,lng]); distanceTracker[currentLine.category]+=(d||0); updateDistanceDisplay(); }
-      coords.push([lat,lng]);
-      currentLine.polyline.addLatLng([lat,lng]);
-      currentLine.tEnd=new Date().toISOString();
-    },err=>console.log(err),{enableHighAccuracy:true,maximumAge:1000,timeout:10000});
-  }
-
-  function stopRecording(){
-    if(watchId){ navigator.geolocation.clearWatch(watchId); watchId=null; }
-    endSegment();
-    currentLine=null;
-    document.getElementById('recordingIndicator').style.display='none';
-  }
-
-  document.getElementById('startBtn').addEventListener('click', ()=>{ if(!('geolocation' in navigator)){ alert('Geolocation not supported'); return; } recording=true; startRecording(); });
-  document.getElementById('stopBtn').addEventListener('click', ()=>{ recording=false; stopRecording(); });
-
-  document.getElementBy
+// --- Keyboard ---
+document.addEventListener('keydown',ev=>{
+  const k=ev.key.toLowerCase();
+  if(k==='l'){currentCategory='light';highlightCategory();}
+  if(k==='m'){currentCategory='moderate';highlightCategory();}
+  if(k==='h'){currentCategory='heavy';highlightCategory();}
+  if(k==='d'){currentCategory='dead';highlightCategory();}
+  if(k==='c'){currentCategory='clear';highlightCategory();}
+  if(k==='s') document.getElementById('startBtn').click();
+  if(k==='t') document.getElementById('stopBtn').click
