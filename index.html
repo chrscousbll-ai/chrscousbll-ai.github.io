@@ -175,4 +175,36 @@
       if(watchId){ navigator.geolocation.clearWatch(watchId); watchId=null; }
     });
 
-    document.getElement
+    document.getElementById('clearLastBtn').addEventListener('click',()=>{
+      if(segments.length===0) return;
+      const last = segments.pop();
+      if(last.polyline) map.removeLayer(last.polyline);
+      recalcDistances();
+      saveSegments();
+    });
+
+    followBtn.addEventListener('click',()=>{
+      followGPS=!followGPS;
+      followBtn.innerText=`Follow GPS: ${followGPS?'ON':'OFF'}`;
+    });
+
+    document.getElementById('exportBtn').addEventListener('click',()=>{
+      endSegment();
+      const features = segments.filter(s=>s.coords.length>=2).map(s=>({
+        type:"Feature",
+        geometry:{type:"LineString", coordinates:s.coords.map(([lat,lng])=>[lng,lat])},
+        properties:{category:CAT_INFO[s.category].label, color:CAT_INFO[s.category].color, time_start:s.tStart, time_end:s.tEnd}
+      }));
+      const fc = {type:"FeatureCollection", features};
+      const blob = new Blob([JSON.stringify(fc,null,2)], {type:"application/geo+json"});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href=url; a.download='vegetation_map.geojson'; a.click();
+      URL.revokeObjectURL(url);
+    });
+
+    // Restore previous session
+    restoreSegments();
+  </script>
+</body>
+</html>
