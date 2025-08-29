@@ -128,6 +128,9 @@ function loadSegments(){
   updateDistanceDisplay();
 }
 
+// --- Load saved data ---
+loadSegments();
+
 // --- Category selection ---
 document.querySelectorAll('#controls button[data-cat]').forEach(btn=>{
   btn.addEventListener('click',()=>{
@@ -250,3 +253,15 @@ document.addEventListener('keydown', ev=>{
   if(k==='h'){currentCategory='heavy';highlightCategory();}
   if(k==='d'){currentCategory='dead';highlightCategory();}
   if(k==='c'){currentCategory='clear';highlightCategory();}
+  if(k==='s'){startRecording();}
+  if(k==='t'){stopRecording();}
+  if(k==='f'){document.getElementById('followBtn').click();}
+  if(k==='o'){document.getElementById('locationBtn').click();}
+  if(k==='k'){document.getElementById('clearLastBtn').click();}
+  if(k==='e'){document.getElementById('exportBtn').click();}
+  if(k==='v'){document.getElementById('saveBtn').click();}
+  if(k==='u'){document.getElementById('uploadBtn').click();}
+});
+</script>
+</body>
+</html>
