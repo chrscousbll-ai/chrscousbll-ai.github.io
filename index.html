@@ -5,18 +5,24 @@
 <title>Vegetation Mapper</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
 <style>
-  body, html { margin:0; padding:0; height:100%; font-family:sans-serif; }
-  #map { height:100%; width:100%; }
-  #controls { position:absolute; top:10px; left:10px; z-index:1001;
-    background:rgba(255,255,255,0.95); padding:8px; border-radius:6px;
-    display:flex; flex-direction:column; gap:6px; max-width:180px; }
-  #legend { position:absolute; bottom:10px; left:10px; z-index:1001;
-    background:rgba(255,255,255,0.95); padding:8px; border-radius:6px; }
-  #gpsDisplay { position:absolute; bottom:10px; right:10px; z-index:1001;
-    background:rgba(255,255,255,0.95); padding:8px; border-radius:6px; text-align:right; }
-  button { padding:8px; font-size:14px; cursor:pointer; }
-  .catActive { box-shadow: inset 0 0 0 2px rgba(0,0,0,0.2); }
-  #recordingIndicator { color:red; font-weight:bold; display:none; margin-top:4px; }
+body, html { margin:0; padding:0; height:100%; font-family:sans-serif; }
+#map { height:100%; width:100%; }
+#controls {
+  position:absolute; top:10px; left:10px; z-index:1001;
+  background:rgba(255,255,255,0.95); padding:8px; border-radius:6px;
+  display:flex; flex-direction:column; gap:6px; max-width:180px;
+}
+#legend {
+  position:absolute; bottom:10px; left:10px; z-index:1001;
+  background:rgba(255,255,255,0.95); padding:8px; border-radius:6px;
+}
+#gpsDisplay {
+  position:absolute; bottom:10px; right:10px; z-index:1001;
+  background:rgba(255,255,255,0.95); padding:8px; border-radius:6px; text-align:right;
+}
+button { padding:8px; font-size:14px; cursor:pointer; }
+.catActive { box-shadow: inset 0 0 0 2px rgba(0,0,0,0.2); }
+#recordingIndicator { color:red; font-weight:bold; display:none; margin-top:4px; }
 </style>
 </head>
 <body>
@@ -53,11 +59,17 @@
 
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 <script>
-// --- Category colors ---
-const CAT_INFO={light:{color:"green",label:"Light"},moderate:{color:"orange",label:"Moderate"},heavy:{color:"red",label:"Heavy"},dead:{color:"black",label:"Dead Tree"},clear:{color:"blue",label:"Clear"}};
+// --- Categories ---
+const CAT_INFO = {
+  light:{color:"green",label:"Light"},
+  moderate:{color:"orange",label:"Moderate"},
+  heavy:{color:"red",label:"Heavy"},
+  dead:{color:"black",label:"Dead Tree"},
+  clear:{color:"blue",label:"Clear"}
+};
 
-// --- Map setup ---
-const map=L.map('map').setView([44.809,-68.885],13);
+// --- Map ---
+const map = L.map('map').setView([44.809,-68.885],13);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(map);
 
 // --- State ---
@@ -150,7 +162,7 @@ function stopRecording(){
 // --- Buttons ---
 document.getElementById('startBtn').addEventListener('click',()=>{if(!('geolocation'in navigator)){alert('Geolocation not supported');return;} recording=true; startRecording();});
 document.getElementById('stopBtn').addEventListener('click',()=>{recording=false; stopRecording();});
-document.getElementById('followBtn').addEventListener('click',()=>{followGPS=!followGPS;document.getElementById('followBtn').innerText=`Follow GPS: ${followGPS?'ON':'OFF'}`;});
+document.getElementById('followBtn').addEventListener('click',()=>{followGPS=!followGPS;document.getElementById('followBtn').innerText=`Follow GPS: ${followGPS?'ON':'OFF}`;});
 document.getElementById('locationBtn').addEventListener('click',()=>{
   if(locationWatchId){navigator.geolocation.clearWatch(locationWatchId);locationWatchId=null;if(locationMarker){map.removeLayer(locationMarker);locationMarker=null;} document.getElementById('locationBtn').innerText='Show Location: OFF'; return;}
   locationWatchId=navigator.geolocation.watchPosition(pos=>{
@@ -179,7 +191,7 @@ document.getElementById('exportBtn').addEventListener('click',()=>{
   const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='vegetation_export.json'; a.click(); URL.revokeObjectURL(url);
 });
 
-// --- Keyboard ---
+// --- Keyboard shortcuts ---
 document.addEventListener('keydown',ev=>{
   const k=ev.key.toLowerCase();
   if(k==='l'){currentCategory='light';highlightCategory();}
@@ -188,4 +200,26 @@ document.addEventListener('keydown',ev=>{
   if(k==='d'){currentCategory='dead';highlightCategory();}
   if(k==='c'){currentCategory='clear';highlightCategory();}
   if(k==='s') document.getElementById('startBtn').click();
-  if(k==='t') document.getElementById('stopBtn').click
+  if(k==='t') document.getElementById('stopBtn').click();
+  if(k==='f') document.getElementById('followBtn').click();
+  if(k==='o') document.getElementById('locationBtn').click();
+  if(k==='k') document.getElementById('clearLastBtn').click();
+  if(k==='e') document.getElementById('exportBtn').click();
+});
+
+// --- Persistent storage ---
+function saveSegments(){ localStorage.setItem('vegSegments', JSON.stringify(segments)); }
+function loadSegments(){
+  const data = localStorage.getItem('vegSegments'); if(!data) return;
+  const saved = JSON.parse(data); saved.forEach(s=>{
+    if(s.polyline){ const poly=L.polyline(s.coords,{color:CAT_INFO[s.category].color,weight:5}).addTo(map); s.polyline=poly; attachDeleteHandler(s);}
+    else if(s.marker || (s.coords.length===1 && s.category==='dead')){ const marker=L.circleMarker(s.coords[0],{color:'black',radius:7,fillOpacity:0.9}).addTo(map); s.marker=marker; attachDeleteHandler(s);}
+    segments.push(s);
+    if(s.coords.length>1 && s.category!=='dead'){let d=0;for(let i=1;i<s.coords.length;i++) d+=distanceBetween(s.coords[i-1],s.coords[i]); distanceTracker[s.category]=(distanceTracker[s.category]||0)+d;}
+  });
+  updateDistanceDisplay();
+}
+loadSegments();
+</script>
+</body>
+</html>
