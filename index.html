@@ -28,13 +28,15 @@
     <button data-cat="heavy" style="background:#E53935; color:#fff;">Heavy</button>
     <button data-cat="dead" style="background:#6D4C41; color:#fff;">Dead Tree</button>
     <button data-cat="clear" style="background:#90A4AE;">Clear</button>
+    <button id="startBtn" style="background:#4CAF50; color:white;">Start</button>
+    <button id="stopBtn" style="background:#F44336; color:white;">Stop</button>
     <button id="exportBtn">Export GeoJSON</button>
   </div>
   <div id="status">Waiting for GPS...</div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
-    // category names + colors
+    // categories
     const CAT_INFO = {
       light:   { label: "Light Growth",    color: "#AED581" },
       moderate:{ label: "Moderate Growth", color: "#FFB74D" },
@@ -47,19 +49,21 @@
     let currentLine = null;
     let segments = [];
     let watchId = null;
+    let recording = false;
 
-    const map = L.map('map').setView([0,0], 15);
+    // Start centered on Hermon, ME (no lock)
+    const hermonCenter = [44.809, -68.885]; 
+    const map = L.map('map').setView(hermonCenter, 14);
+
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
       attribution: '© OpenStreetMap'
     }).addTo(map);
 
-    // status helper
     function setStatus(msg) {
       document.getElementById('status').innerText = msg;
     }
 
-    // end a segment
     function endCurrentSegment() {
       if (currentLine) {
         segments.push(currentLine);
@@ -67,7 +71,7 @@
       }
     }
 
-    // button clicks
+    // category change
     document.querySelectorAll('#controls button[data-cat]').forEach(btn => {
       btn.addEventListener('click', () => {
         endCurrentSegment();
@@ -76,36 +80,49 @@
       });
     });
 
-    // GPS tracking
-    if ("geolocation" in navigator) {
-      watchId = navigator.geolocation.watchPosition(pos => {
-        const { latitude, longitude } = pos.coords;
-        if (!map._moved) {
-          map.setView([latitude, longitude], 17);
-          map._moved = true;
-        }
-        if (!currentLine) {
-          currentLine = {
-            category: currentCategory,
-            coords: [],
-            tStart: new Date().toISOString()
-          };
-          currentLine.polyline = L.polyline([], {
-            color: CAT_INFO[currentCategory].color,
-            weight: 5
-          }).addTo(map);
-        }
-        currentLine.coords.push([latitude, longitude]);
-        currentLine.polyline.addLatLng([latitude, longitude]);
-        currentLine.tEnd = new Date().toISOString();
-      }, err => {
-        setStatus("GPS error: " + err.message);
-      }, { enableHighAccuracy:true, maximumAge:1000, timeout:10000 });
-    } else {
-      setStatus("GPS not supported.");
-    }
+    // start recording
+    document.getElementById('startBtn').addEventListener('click', () => {
+      if (recording) return;
+      recording = true;
+      setStatus("Recording started...");
+      if ("geolocation" in navigator) {
+        watchId = navigator.geolocation.watchPosition(pos => {
+          const { latitude, longitude } = pos.coords;
+          if (!currentLine) {
+            currentLine = {
+              category: currentCategory,
+              coords: [],
+              tStart: new Date().toISOString()
+            };
+            currentLine.polyline = L.polyline([], {
+              color: CAT_INFO[currentCategory].color,
+              weight: 5
+            }).addTo(map);
+          }
+          currentLine.coords.push([latitude, longitude]);
+          currentLine.polyline.addLatLng([latitude, longitude]);
+          currentLine.tEnd = new Date().toISOString();
+        }, err => {
+          setStatus("GPS error: " + err.message);
+        }, { enableHighAccuracy:true, maximumAge:1000, timeout:10000 });
+      } else {
+        setStatus("GPS not supported.");
+      }
+    });
 
-    // Export GeoJSON
+    // stop recording
+    document.getElementById('stopBtn').addEventListener('click', () => {
+      if (!recording) return;
+      recording = false;
+      endCurrentSegment();
+      if (watchId) {
+        navigator.geolocation.clearWatch(watchId);
+        watchId = null;
+      }
+      setStatus("Recording stopped.");
+    });
+
+    // export GeoJSON
     document.getElementById('exportBtn').addEventListener('click', () => {
       endCurrentSegment();
       const features = segments.filter(s => s.coords.length >= 2).map(s => ({
@@ -115,8 +132,8 @@
           coordinates: s.coords.map(([lat, lng]) => [lng, lat])
         },
         properties: {
-          category: CAT_INFO[s.category].label, // full human-readable label
-          color: CAT_INFO[s.category].color,    // hex color
+          category: CAT_INFO[s.category].label,
+          color: CAT_INFO[s.category].color,
           time_start: s.tStart,
           time_end: s.tEnd
         }
