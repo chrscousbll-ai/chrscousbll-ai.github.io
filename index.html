@@ -188,4 +188,65 @@ document.getElementById('followBtn').addEventListener('click',()=>{
   document.getElementById('followBtn').innerText=`Follow GPS: ${followGPS?'ON':'OFF'}`;
 });
 document.getElementById('locationBtn').addEventListener('click',()=>{
-  if(locationWatchId){navigator.geolocation.clearWatch(locationWatchId);locationWatchId=null;if(locationMarker){map.removeLayer(locationMarker);location
+  if(locationWatchId){navigator.geolocation.clearWatch(locationWatchId);locationWatchId=null;if(locationMarker){map.removeLayer(locationMarker);locationMarker=null;} document.getElementById('locationBtn').innerText='Show Location: OFF'; return;}
+  locationWatchId=navigator.geolocation.watchPosition(pos=>{
+    const lat=pos.coords.latitude,lng=pos.coords.longitude;
+    if(!locationMarker) locationMarker=L.circleMarker([lat,lng],{radius:6,color:'blue',fillColor:'blue',fillOpacity:0.8}).addTo(map);
+    else locationMarker.setLatLng([lat,lng]);
+    updateGPSDisplay(lat,lng);
+    if(followGPS) map.setView([lat,lng], map.getZoom());
+  }, err=>console.log(err), {enableHighAccuracy:true, maximumAge:1000, timeout:10000});
+  document.getElementById('locationBtn').innerText='Show Location: ON';
+});
+document.getElementById('clearLastBtn').addEventListener('click',()=>{
+  const last=segments.pop(); if(!last) return;
+  if(last.polyline) map.removeLayer(last.polyline);
+  if(last.marker) map.removeLayer(last.marker);
+  updateDistanceDisplay();
+  saveSegments();
+});
+document.getElementById('exportBtn').addEventListener('click',()=>{
+  const exportData = segments.map(s=>({category:s.category, coords:s.coords, tStart:s.tStart, tEnd:s.tEnd}));
+  const blob = new Blob([JSON.stringify(exportData,null,2)], {type:"application/json"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href=url; a.download='vegetation_export.json'; a.click(); URL.revokeObjectURL(url);
+});
+document.getElementById('saveBtn').addEventListener('click',()=>{
+  saveSegments();
+  alert('Map saved locally.');
+});
+document.getElementById('uploadBtn').addEventListener('click',()=>{document.getElementById('uploadInput').click();});
+document.getElementById('uploadInput').addEventListener('change', e=>{
+  const file=e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = ev=>{
+    const data = JSON.parse(ev.target.result);
+    segments.forEach(s=>{if(s.polyline) map.removeLayer(s.polyline); if(s.marker) map.removeLayer(s.marker);});
+    segments=[]; for(const k in distanceTracker) distanceTracker[k]=0;
+    data.forEach(s=>{
+      if(s.category==='dead'){
+        const marker=L.circleMarker(s.coords[0],{color:'black',radius:7,fillOpacity:0.9}).addTo(map);
+        segments.push({category:'dead', coords:s.coords, marker:marker});
+      } else {
+        const poly=L.polyline(s.coords,{color:CAT_INFO[s.category].color,weight:5}).addTo(map);
+        segments.push({category:s.category, coords:s.coords, polyline:poly, tStart:s.tStart, tEnd:s.tEnd});
+        for(let i=1;i<s.coords.length;i++){
+          const d=distanceBetween(s.coords[i-1],s.coords[i]);
+          distanceTracker[s.category]+=(d||0);
+        }
+      }
+    });
+    updateDistanceDisplay(); saveSegments();
+  };
+  reader.readAsText(file);
+});
+
+// --- Keyboard shortcuts ---
+document.addEventListener('keydown', ev=>{
+  const k=ev.key.toLowerCase();
+  if(k==='l'){currentCategory='light';highlightCategory();}
+  if(k==='m'){currentCategory='moderate';highlightCategory();}
+  if(k==='h'){currentCategory='heavy';highlightCategory();}
+  if(k==='d'){currentCategory='dead';highlightCategory();}
+  if(k==='c'){currentCategory='clear';highlightCategory();}
