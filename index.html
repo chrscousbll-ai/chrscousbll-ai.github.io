@@ -85,6 +85,37 @@ function highlightCategory(){
   if(btn) btn.classList.add('catActive');
 }
 
+// --- Save/Load ---
+function saveSegments(){
+  const toSave = segments.map(s=>{
+    const obj = {category:s.category, coords:s.coords};
+    if(s.tStart) obj.tStart = s.tStart;
+    if(s.tEnd) obj.tEnd = s.tEnd;
+    return obj;
+  });
+  localStorage.setItem('vegetation_segments', JSON.stringify(toSave));
+}
+function loadSegments(){
+  const data = localStorage.getItem('vegetation_segments');
+  if(!data) return;
+  const arr = JSON.parse(data);
+  arr.forEach(s=>{
+    if(s.category === 'dead'){
+      const marker = L.circleMarker(s.coords[0], {color:'black', radius:7, fillOpacity:0.9}).addTo(map);
+      segments.push({category:'dead', coords:s.coords, marker:marker});
+    } else {
+      const poly = L.polyline(s.coords, {color:CAT_INFO[s.category].color, weight:5}).addTo(map);
+      segments.push({category:s.category, coords:s.coords, polyline:poly, tStart:s.tStart, tEnd:s.tEnd});
+      // update distance tracker
+      for(let i=1;i<s.coords.length;i++){
+        const d = distanceBetween(s.coords[i-1], s.coords[i]);
+        distanceTracker[s.category] = (distanceTracker[s.category]||0)+d;
+      }
+    }
+  });
+  updateDistanceDisplay();
+}
+
 // --- Category selection ---
 document.querySelectorAll('#controls button[data-cat]').forEach(btn=>{
   btn.addEventListener('click',()=>{
@@ -102,13 +133,14 @@ function startSegment(cat){
   currentLine={category:cat, coords:[], polyline:poly, tStart:new Date().toISOString(), tEnd:null};
   segments.push(currentLine);
 }
-function endSegment(){ if(currentLine){currentLine.tEnd=new Date().toISOString(); currentLine=null;} }
+function endSegment(){ if(currentLine){currentLine.tEnd=new Date().toISOString(); currentLine=null; saveSegments(); } }
 
 // --- Dead tree ---
 function placeDeadTree(lat,lng){
   const marker=L.circleMarker([lat,lng],{color:'black',radius:7,fillOpacity:0.9}).addTo(map);
   const seg={category:'dead',coords:[[lat,lng]],marker:marker, t:new Date().toISOString()};
   segments.push(seg);
+  saveSegments();
 }
 
 // --- Recording ---
@@ -127,6 +159,7 @@ function startRecording(){
     coords.push([lat,lng]);
     currentLine.polyline.addLatLng([lat,lng]);
     currentLine.tEnd=new Date().toISOString();
+    saveSegments();
   }, err=>console.log(err), {enableHighAccuracy:true, maximumAge:1000, timeout:10000});
 }
 function stopRecording(){
@@ -158,6 +191,7 @@ document.getElementById('clearLastBtn').addEventListener('click',()=>{
   if(last.polyline) map.removeLayer(last.polyline);
   if(last.marker) map.removeLayer(last.marker);
   updateDistanceDisplay();
+  saveSegments();
 });
 document.getElementById('exportBtn').addEventListener('click',()=>{
   const exportData=segments.map(s=>({category:s.category,coords:s.coords}));
@@ -180,6 +214,9 @@ document.addEventListener('keydown', ev=>{
   if(k==='k') document.getElementById('clearLastBtn').click();
   if(k==='e') document.getElementById('exportBtn').click();
 });
+
+// --- Load saved segments ---
+loadSegments();
 </script>
 </body>
 </html>
