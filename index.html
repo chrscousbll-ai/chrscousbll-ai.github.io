@@ -188,22 +188,4 @@ document.getElementById('followBtn').addEventListener('click',()=>{
   document.getElementById('followBtn').innerText=`Follow GPS: ${followGPS?'ON':'OFF'}`;
 });
 document.getElementById('locationBtn').addEventListener('click',()=>{
-  if(locationWatchId){navigator.geolocation.clearWatch(locationWatchId);locationWatchId=null;if(locationMarker){map.removeLayer(locationMarker);locationMarker=null;} document.getElementById('locationBtn').innerText='Show Location: OFF'; return;}
-  locationWatchId=navigator.geolocation.watchPosition(pos=>{
-    const lat=pos.coords.latitude,lng=pos.coords.longitude;
-    if(!locationMarker) locationMarker=L.circleMarker([lat,lng],{radius:6,color:'blue',fillColor:'blue',fillOpacity:0.8}).addTo(map);
-    else locationMarker.setLatLng([lat,lng]);
-    updateGPSDisplay(lat,lng);
-    if(followGPS) map.setView([lat,lng], map.getZoom());
-  }, err=>console.log(err), {enableHighAccuracy:true, maximumAge:1000, timeout:10000});
-  document.getElementById('locationBtn').innerText='Show Location: ON';
-});
-document.getElementById('clearLastBtn').addEventListener('click',()=>{
-  const last=segments.pop(); if(!last) return;
-  if(last.polyline) map.removeLayer(last.polyline);
-  if(last.marker) map.removeLayer(last.marker);
-  updateDistanceDisplay();
-  saveSegments();
-});
-document.getElementById('exportBtn').addEventListener('click',()=>{
-  const exportData=segments.map(s=>({category:s.category,
+  if(locationWatchId){navigator.geolocation.clearWatch(locationWatchId);locationWatchId=null;if(locationMarker){map.removeLayer(locationMarker);location
