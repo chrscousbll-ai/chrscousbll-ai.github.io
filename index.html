@@ -16,8 +16,13 @@ button { padding:6px; font-size:14px; cursor:pointer; }
 .catActive { box-shadow: inset 0 0 0 2px rgba(0,0,0,0.3); }
 #recordingIndicator { color:red; font-weight:bold; display:none; margin-top:4px; }
 #gpsDisplay {
-  position:absolute; bottom:10px; right:10px; z-index:1001;
+  position:absolute; bottom:50px; right:10px; z-index:1001;
   background:rgba(255,255,255,0.95); padding:8px; border-radius:6px; text-align:right;
+}
+#keyLegend {
+  position:absolute; bottom:10px; left:50%; transform:translateX(-50%);
+  background:rgba(255,255,255,0.95); padding:6px 10px; border-radius:6px;
+  font-size:14px; z-index:1001; max-width:95%; text-align:center;
 }
 </style>
 </head>
@@ -35,11 +40,19 @@ button { padding:6px; font-size:14px; cursor:pointer; }
   <button id="stopBtn">Stop</button>
   <button id="clearLastBtn">Clear Last</button>
   <button id="exportBtn">Export</button>
+  <button id="saveBtn">Save</button>
+  <input type="file" id="uploadInput" style="display:none;">
+  <button id="uploadBtn">Upload</button>
   <div id="recordingIndicator">● Recording...</div>
 </div>
 <div id="gpsDisplay">
   <div id="coords">Lat: --, Lng: --</div>
   <div id="distanceDisplay">Total: 0.00 mi</div>
+</div>
+<div id="keyLegend">
+Shortcuts: <b>L</b> Light, <b>M</b> Moderate, <b>H</b> Heavy, <b>D</b> Dead Tree, <b>C</b> Clear, 
+<b>S</b> Start, <b>T</b> Stop, <b>F</b> Follow GPS, <b>O</b> Show Location, <b>K</b> Clear Last, 
+<b>E</b> Export, <b>U</b> Upload, <b>V</b> Save
 </div>
 
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
@@ -106,7 +119,6 @@ function loadSegments(){
     } else {
       const poly = L.polyline(s.coords, {color:CAT_INFO[s.category].color, weight:5}).addTo(map);
       segments.push({category:s.category, coords:s.coords, polyline:poly, tStart:s.tStart, tEnd:s.tEnd});
-      // update distance tracker
       for(let i=1;i<s.coords.length;i++){
         const d = distanceBetween(s.coords[i-1], s.coords[i]);
         distanceTracker[s.category] = (distanceTracker[s.category]||0)+d;
@@ -194,29 +206,4 @@ document.getElementById('clearLastBtn').addEventListener('click',()=>{
   saveSegments();
 });
 document.getElementById('exportBtn').addEventListener('click',()=>{
-  const exportData=segments.map(s=>({category:s.category,coords:s.coords}));
-  const blob=new Blob([JSON.stringify(exportData,null,2)],{type:"application/json"});
-  const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='vegetation_export.json'; a.click(); URL.revokeObjectURL(url);
-});
-
-// --- Keyboard shortcuts ---
-document.addEventListener('keydown', ev=>{
-  const k=ev.key.toLowerCase();
-  if(k==='l'){currentCategory='light';highlightCategory();}
-  if(k==='m'){currentCategory='moderate';highlightCategory();}
-  if(k==='h'){currentCategory='heavy';highlightCategory();}
-  if(k==='d'){currentCategory='dead';highlightCategory();}
-  if(k==='c'){currentCategory='clear';highlightCategory();}
-  if(k==='s') startRecording();
-  if(k==='t') stopRecording();
-  if(k==='f') document.getElementById('followBtn').click();
-  if(k==='o') document.getElementById('locationBtn').click();
-  if(k==='k') document.getElementById('clearLastBtn').click();
-  if(k==='e') document.getElementById('exportBtn').click();
-});
-
-// --- Load saved segments ---
-loadSegments();
-</script>
-</body>
-</html>
+  const exportData=segments.map(s=>({category:s.category,
