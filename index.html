@@ -138,7 +138,10 @@ function stopRecording(){
 // --- Buttons ---
 document.getElementById('startBtn').addEventListener('click',startRecording);
 document.getElementById('stopBtn').addEventListener('click',stopRecording);
-document.getElementById('followBtn').addEventListener('click',()=>{followGPS=!followGPS; document.getElementById('followBtn').innerText=`Follow GPS: ${followGPS?'ON':'OFF}`;});
+document.getElementById('followBtn').addEventListener('click',()=>{
+  followGPS=!followGPS;
+  document.getElementById('followBtn').innerText=`Follow GPS: ${followGPS?'ON':'OFF'}`;
+});
 document.getElementById('locationBtn').addEventListener('click',()=>{
   if(locationWatchId){navigator.geolocation.clearWatch(locationWatchId);locationWatchId=null;if(locationMarker){map.removeLayer(locationMarker);locationMarker=null;} document.getElementById('locationBtn').innerText='Show Location: OFF'; return;}
   locationWatchId=navigator.geolocation.watchPosition(pos=>{
