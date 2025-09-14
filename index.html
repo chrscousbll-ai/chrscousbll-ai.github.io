@@ -1,74 +1,69 @@
-<!doctype html>
-<html>
+<!DOCTYPE html>
+<html lang="en">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Vegetation Mapping</title>
-
-<!-- PWA meta -->
-<link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#6ab04c">
-<link rel="apple-touch-icon" href="icon-192.png">
-
-<!-- Leaflet CSS/JS -->
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vegetation Mapper</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 <style>
-  html,body,#map { height:100%; margin:0; padding:0; }
+  html, body, #map { height: 100%; margin: 0; padding: 0; }
+  
+  /* Controls panel */
   #controls {
-    position: absolute;
-    top: 8px; left: 8px;
-    z-index: 1000;
-    background: rgba(255,255,255,0.95);
-    padding:8px; border-radius:6px;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.3);
-    font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+    position: absolute; top: 8px; left: 8px; z-index: 1000;
+    background: rgba(255,255,255,0.95); padding:12px; border-radius:8px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.3); font-family: system-ui;
   }
+  
   #legend {
-    position:absolute;
-    right:8px; top:8px;
-    z-index:1000;
-    background: rgba(255,255,255,0.9);
-    padding:8px; border-radius:6px;
-    cursor: move;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.25);
-    user-select:none;
+    position:absolute; right:8px; top:8px; z-index:1000;
+    background: rgba(255,255,255,0.9); padding:8px; border-radius:6px;
+    cursor: move; box-shadow: 0 2px 6px rgba(0,0,0,0.25); user-select:none;
   }
+  
   #bottomKey {
-    position: absolute;
-    bottom:8px; left:8px; right:8px;
-    z-index:1000;
-    background: rgba(255,255,255,0.92);
-    padding:8px; border-radius:6px;
-    display:flex; gap:8px; align-items:center; overflow:auto;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.2);
-    font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+    position: absolute; bottom:8px; left:8px; right:8px; z-index:1000;
+    background: rgba(255,255,255,0.92); padding:8px; border-radius:6px;
+    display:flex; gap:12px; align-items:center; overflow:auto;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.2); font-family: system-ui;
   }
-  .category-btn {
-    padding:6px 8px; border-radius:6px; border:1px solid #ccc; cursor:pointer;
+  
+  /* Bigger buttons */
+  .category-btn, button {
+    padding: 12px 16px;
+    font-size: 16px;
+    border-radius: 8px;
+    border: 1px solid #ccc;
+    cursor: pointer;
   }
-  .category-swatch { width:16px; height:16px; display:inline-block; margin-right:6px; vertical-align:middle; border-radius:3px; border:1px solid rgba(0,0,0,0.1) }
-  #status { font-size:13px; margin-top:6px; color:#333 }
+  
+  .category-swatch {
+    width: 24px;
+    height: 24px;
+    margin-right: 8px;
+    vertical-align: middle;
+    border-radius: 4px;
+    border: 1px solid rgba(0,0,0,0.1);
+  }
+
+  #status { font-size:14px; margin-top:8px; color:#333 }
   .small { font-size:12px; color:#666 }
-  button { cursor:pointer; }
   input[type=file] { display:none; }
 </style>
 </head>
 <body>
-
 <div id="map"></div>
 
 <div id="controls">
-  <div style="display:flex; gap:6px; align-items:center;">
+  <div style="display:flex; gap:12px; align-items:center; flex-wrap: wrap;">
     <button id="startRec">Start Recording</button>
     <button id="stopRec" disabled>Stop</button>
     <label><input type="checkbox" id="followToggle"> Follow GPS</label>
     <button id="clearLast">Clear Last</button>
     <button id="clearAll">Clear All</button>
   </div>
-
-  <div style="margin-top:8px; display:flex; gap:6px; align-items:center;">
+  <div style="margin-top:12px; display:flex; gap:12px; align-items:center; flex-wrap: wrap;">
     <button id="exportBtn">Export GeoJSON</button>
     <label class="category-btn">
       <span id="importLabel">Import GeoJSON</span>
@@ -77,7 +72,6 @@
     <button id="saveLocal">Save (localStorage)</button>
     <button id="loadLocal">Load (localStorage)</button>
   </div>
-
   <div id="status">
     <div><strong>Live:</strong> <span id="coords">—</span></div>
     <div class="small">Category distances: <span id="catDist">—</span> — Total: <span id="totalDist">0.00</span> m</div>
@@ -92,7 +86,7 @@
 <div id="bottomKey"></div>
 
 <script>
-// === Categories config ===
+// === Categories ===
 const CATEGORIES = [
   { id: 'grass', label: 'Grass', color: '#6ab04c' },
   { id: 'shrub', label: 'Shrub', color: '#f6b93b' },
@@ -101,13 +95,13 @@ const CATEGORIES = [
   { id: 'bare', label: 'Bare', color: '#d1ccc0' }
 ];
 
-// map init
+// Map initialization
 const map = L.map('map', { zoomControl:true }).setView([44.8, -68.7], 13);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   maxZoom: 19, attribution: '© OpenStreetMap contributors'
 }).addTo(map);
 
-// state
+// State
 let currentCategory = CATEGORIES[0].id;
 let recording = false;
 let watchId = null;
@@ -115,7 +109,7 @@ let pathSegments = [];
 let currentSegment = null;
 const distances = {}; CATEGORIES.forEach(c => distances[c.id] = 0);
 
-// utils
+// Utils
 function haversine(a, b) {
   const toRad = v => v * Math.PI / 180;
   const R = 6371000;
@@ -123,15 +117,13 @@ function haversine(a, b) {
   const dLon = toRad(b.lng - a.lng);
   const lat1 = toRad(a.lat);
   const lat2 = toRad(b.lat);
-  const sinDLat = Math.sin(dLat/2);
-  const sinDLon = Math.sin(dLon/2);
-  const aa = sinDLat*sinDLat + sinDLon*sinDLon * Math.cos(lat1) * Math.cos(lat2);
+  const aa = Math.sin(dLat/2)**2 + Math.sin(dLon/2)**2 * Math.cos(lat1) * Math.cos(lat2);
   const c = 2 * Math.atan2(Math.sqrt(aa), Math.sqrt(1-aa));
   return R * c;
 }
 function totalDistance() { return Object.values(distances).reduce((a,b)=>a+b,0); }
 
-// build legend + bottom key
+// Legend and bottom key
 const legendContent = document.getElementById('legendContent');
 const bottomKey = document.getElementById('bottomKey');
 CATEGORIES.forEach(cat => {
@@ -153,21 +145,19 @@ CATEGORIES.forEach(cat => {
 });
 document.getElementById('cat_' + currentCategory).style.outline = '3px solid rgba(0,0,0,0.12)';
 
-// layers
+// Layers
 const segmentLayers = L.layerGroup().addTo(map);
 function renderSegments() {
   segmentLayers.clearLayers();
   for (const seg of pathSegments) {
-    L.polyline(seg.latlngs, { color: getColorFor(seg.category), weight: 5 }).addTo(segmentLayers);
+    L.polyline(seg.latlngs, { color: seg.color || getColorFor(seg.category), weight: 5 }).addTo(segmentLayers);
   }
   if (currentSegment) {
     L.polyline(currentSegment.latlngs, { color: getColorFor(currentSegment.category), weight: 5, dashArray: '6 4' }).addTo(segmentLayers);
   }
   updateStatus();
 }
-function getColorFor(catId) {
-  const c = CATEGORIES.find(x=>x.id===catId); return c ? c.color : '#000';
-}
+function getColorFor(catId) { const c = CATEGORIES.find(x=>x.id===catId); return c ? c.color : '#000'; }
 
 // UI elements
 const startRecBtn = document.getElementById('startRec');
@@ -177,7 +167,7 @@ const coordsEl = document.getElementById('coords');
 const catDistEl = document.getElementById('catDist');
 const totalDistEl = document.getElementById('totalDist');
 
-// geolocation
+// Geolocation
 startRecBtn.onclick = () => {
   if (recording) return;
   recording = true;
@@ -193,9 +183,7 @@ stopRecBtn.onclick = () => {
   startRecBtn.disabled = false;
   stopRecBtn.disabled = true;
   if (watchId) { navigator.geolocation.clearWatch(watchId); watchId = null; }
-  if (currentSegment && currentSegment.latlngs.length) {
-    pathSegments.push(currentSegment); currentSegment = null; renderSegments();
-  }
+  if (currentSegment && currentSegment.latlngs.length) { pathSegments.push(currentSegment); currentSegment = null; renderSegments(); }
 };
 function onPos(p) {
   const latlng = { lat:p.coords.latitude, lng:p.coords.longitude };
@@ -216,7 +204,7 @@ function updateStatus() {
   totalDistEl.textContent = totalDistance().toFixed(1);
 }
 
-// clear buttons
+// Clear buttons
 document.getElementById('clearLast').onclick = () => { pathSegments.pop(); renderSegments(); };
 document.getElementById('clearAll').onclick = () => { pathSegments=[]; renderSegments(); };
 
@@ -242,10 +230,12 @@ document.getElementById('fileInput').onchange = e => {
   }; reader.readAsText(file);
 };
 
-// Register service worker
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('service-worker.js');
-}
+// Local storage
+document.getElementById('saveLocal').onclick = () => { localStorage.setItem('vegmap', JSON.stringify(pathSegments)); };
+document.getElementById('loadLocal').onclick = () => {
+  const data = localStorage.getItem('vegmap');
+  if (data) { pathSegments = JSON.parse(data); renderSegments(); }
+};
 </script>
 </body>
 </html>
