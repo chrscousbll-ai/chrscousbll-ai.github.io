@@ -31,6 +31,7 @@ html, body, #map { height: 100%; margin:0; padding:0; }
 }
 
 .dead-tree-icon { font-size: 24px; text-align:center; line-height:32px; }
+.delete-btn { font-size:14px; padding:4px 6px; cursor:pointer; }
 </style>
 </head>
 <body>
@@ -50,7 +51,6 @@ html, body, #map { height: 100%; margin:0; padding:0; }
   <button id="followBtn">Follow GPS</button>
   <button id="clearLast">Clear Last</button>
   <button id="clearAll">Clear All</button>
-
   <button id="exportBtn">Export GeoJSON</button>
 </div>
 
@@ -88,21 +88,36 @@ document.querySelectorAll('[data-cat]').forEach(btn=>{
       if("geolocation" in navigator){
         navigator.geolocation.getCurrentPosition(p=>{
           const latlng={lat:p.coords.latitude,lng:p.coords.longitude};
-          // Place marker
-          L.marker([latlng.lat,latlng.lng],{icon:deadTreeIcon}).addTo(map).bindPopup("Dead Tree");
-          // Save for export
-          pathSegments.push({category:"dead",latlngs:[latlng]});
+
+          // Create marker
+          const marker = L.marker([latlng.lat,latlng.lng], {icon:deadTreeIcon}).addTo(map);
+
+          // Save segment
+          const segment = {category:"dead", latlngs:[latlng], marker};
+          pathSegments.push(segment);
+
+          // Add popup with Delete button
+          marker.bindPopup('<button class="delete-btn">Delete Dead Tree</button>').openPopup();
+
+          marker.on('popupopen', function() {
+            const btnDel = document.querySelector('.delete-btn');
+            btnDel.onclick = () => {
+              map.removeLayer(marker);
+              const index = pathSegments.indexOf(segment);
+              if(index > -1) pathSegments.splice(index,1);
+            };
+          });
         });
       } else alert("Geolocation not available.");
 
-      // Flash button
+      // Flash button briefly
       btn.classList.add("active");
       setTimeout(()=>btn.classList.remove("active"),300);
 
     } else {
       currentCategory=cat;
       document.querySelectorAll('[data-cat]').forEach(b=>b.classList.remove("active"));
-      btn.classList.add("active");
+      btn.classList.add('active');
     }
   };
 });
