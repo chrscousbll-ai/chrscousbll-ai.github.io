@@ -1,173 +1,163 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Vegetation Mapping Tool</title>
-    
-    <!-- Leaflet CSS -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
-    <style>
-        body { font-family: Arial, sans-serif; margin: 10px; }
-        #map { height: 600px; width: 100%; margin-top: 10px; }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vegetation Mapping Tool</title>
 
-        /* Button container */
-        #button-container {
-            display: flex;
-            flex-wrap: wrap;       /* wrap buttons if screen is small */
-            gap: 10px;             /* spacing between buttons */
-            margin-bottom: 10px;
-        }
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+<style>
+    body { font-family: Arial, sans-serif; margin: 10px; }
+    #map { height: 600px; width: 100%; margin-top: 10px; }
 
-        #button-container button {
-            flex: 1 1 120px;       /* minimum width, grow if possible */
-            padding: 10px 15px;    /* bigger buttons for easier tapping */
-            font-size: 16px;
-            cursor: pointer;
-        }
+    #toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-bottom: 10px;
+    }
+    #toolbar button {
+        flex: 1 1 120px;
+        padding: 10px 15px;
+        font-size: 16px;
+        cursor: pointer;
+    }
+    .selected { border: 2px solid black; background-color: #ddd; }
 
-        .selected { border: 2px solid black; background-color: #ddd; }
-
-        #distances { margin-top: 10px; }
-        #distances ul { list-style: none; padding-left: 0; }
-        #distances li { margin-bottom: 5px; }
-    </style>
+    #distances { margin-top: 10px; }
+    #distances ul { list-style: none; padding-left: 0; }
+    #distances li { margin-bottom: 5px; }
+</style>
 </head>
 <body>
-    <h1>Vegetation Mapping Tool</h1>
 
-    <!-- Buttons -->
-    <div id="button-container">
-        <button id="btn-no" onclick="selectVegetation('no', this)">No Vegetation</button>
-        <button id="btn-light" onclick="selectVegetation('light', this)">Light</button>
-        <button id="btn-moderate" onclick="selectVegetation('moderate', this)">Moderate</button>
-        <button id="btn-heavy" onclick="selectVegetation('heavy', this)">Heavy</button>
-    </div>
+<h1>Vegetation Mapping Tool</h1>
 
-    <!-- Map -->
-    <div id="map"></div>
+<div id="toolbar">
+    <button id="btn-no" onclick="selectVegetation('no', this)">No Vegetation</button>
+    <button id="btn-light" onclick="selectVegetation('light', this)">Light</button>
+    <button id="btn-moderate" onclick="selectVegetation('moderate', this)">Moderate</button>
+    <button id="btn-heavy" onclick="selectVegetation('heavy', this)">Heavy</button>
+    <button id="btn-dead" onclick="selectVegetation('dead', this)">Dead Tree</button>
+    <button id="btn-gps" onclick="toggleGPSFollow()">GPS Follow</button>
+    <button id="btn-export" onclick="exportKML()">Export KML</button>
+    <button id="btn-clear" onclick="clearMap()">Clear Map</button>
+</div>
 
-    <!-- Distances -->
-    <div id="distances">
-        <h3>Distance Traveled (meters)</h3>
-        <ul>
-            <li>No Vegetation: <span id="dist-no">0</span></li>
-            <li>Light: <span id="dist-light">0</span></li>
-            <li>Moderate: <span id="dist-moderate">0</span></li>
-            <li>Heavy: <span id="dist-heavy">0</span></li>
-        </ul>
-    </div>
+<div id="map"></div>
 
-    <!-- Leaflet JS -->
-    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-    <script>
-        // Initialize map
-        const map = L.map('map').setView([45.0, -68.7], 10);
+<div id="distances">
+    <h3>Distance Traveled (meters)</h3>
+    <ul>
+        <li>No Vegetation: <span id="dist-no">0</span></li>
+        <li>Light: <span id="dist-light">0</span></li>
+        <li>Moderate: <span id="dist-moderate">0</span></li>
+        <li>Heavy: <span id="dist-heavy">0</span></li>
+        <li>Dead Tree: <span id="dist-dead">0</span></li>
+    </ul>
+</div>
 
-        // OpenStreetMap tiles
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            maxZoom: 19,
-            attribution: '© OpenStreetMap'
-        }).addTo(map);
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<script>
+    const map = L.map('map').setView([45.0, -68.7], 10);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '© OpenStreetMap'
+    }).addTo(map);
 
-        // Vegetation settings
-        let currentVegetation = 'no';
-        let lastSelectedButton = document.getElementById("btn-no");
+    let currentVegetation = 'no';
+    let lastSelectedButton = document.getElementById("btn-no");
+    let gpsFollowing = true;
 
-        const vegetationColors = {
-            "no": "gray",
-            "light": "green",
-            "moderate": "orange",
-            "heavy": "red"
-        };
+    const vegetationColors = {
+        "no": "gray",
+        "light": "green",
+        "moderate": "orange",
+        "heavy": "red",
+        "dead": "brown"
+    };
 
-        // Track last point per vegetation type
-        const lastPoint = {
-            "no": null,
-            "light": null,
-            "moderate": null,
-            "heavy": null
-        };
+    const lastPoint = { "no": null, "light": null, "moderate": null, "heavy": null, "dead": null };
+    const totalDistance = { "no": 0, "light": 0, "moderate": 0, "heavy": 0, "dead": 0 };
+    const allPoints = []; // for export
+    const allMarkers = []; // for clearing
 
-        // Track total distance per type
-        const totalDistance = {
-            "no": 0,
-            "light": 0,
-            "moderate": 0,
-            "heavy": 0
-        };
+    function selectVegetation(type, button) {
+        currentVegetation = type;
+        if (lastSelectedButton) lastSelectedButton.classList.remove("selected");
+        button.classList.add("selected");
+        lastSelectedButton = button;
+    }
 
-        // Select vegetation type
-        function selectVegetation(type, button) {
-            currentVegetation = type;
+    function drawVegetation(lat, lng) {
+        const color = vegetationColors[currentVegetation] || "black";
+        const marker = L.circle([lat, lng], { radius: 5, color, fillColor: color, fillOpacity: 0.7 }).addTo(map);
+        allMarkers.push(marker);
 
-            if (lastSelectedButton) lastSelectedButton.classList.remove("selected");
-
-            button.classList.add("selected");
-            lastSelectedButton = button;
-
-            console.log("Selected vegetation:", type);
+        const prev = lastPoint[currentVegetation];
+        if (prev) {
+            const dist = map.distance([lat, lng], prev);
+            totalDistance[currentVegetation] += dist;
+            document.getElementById("dist-" + currentVegetation).innerText = totalDistance[currentVegetation].toFixed(1);
         }
+        lastPoint[currentVegetation] = [lat, lng];
 
-        // Draw a vegetation point
-        function drawVegetation(lat, lng) {
-            const color = vegetationColors[currentVegetation] || "black";
+        allPoints.push({ type: currentVegetation, coords: [lat, lng] });
 
-            L.circle([lat, lng], { radius: 5, color: color, fillColor: color, fillOpacity: 0.7 }).addTo(map);
+        selectVegetation('no', document.getElementById("btn-no"));
+    }
 
-            // Calculate distance from last point of the same type
-            const prev = lastPoint[currentVegetation];
-            if (prev) {
-                const dist = map.distance([lat, lng], prev); // meters
-                totalDistance[currentVegetation] += dist;
-                document.getElementById("dist-" + currentVegetation).innerText = totalDistance[currentVegetation].toFixed(1);
-            }
+    map.on('click', e => drawVegetation(e.latlng.lat, e.latlng.lng));
+    lastSelectedButton.classList.add("selected");
 
-            lastPoint[currentVegetation] = [lat, lng];
+    // --- GPS Follow ---
+    let userMarker, watchID;
+    function startGPSFollow() {
+        if (!navigator.geolocation) { alert("Geolocation not supported"); return; }
+        gpsFollowing = true;
+        watchID = navigator.geolocation.watchPosition(pos => {
+            const lat = pos.coords.latitude;
+            const lng = pos.coords.longitude;
+            if (!userMarker) {
+                userMarker = L.circle([lat, lng], { radius: 5, color: "blue", fillColor: "blue", fillOpacity: 0.7 }).addTo(map);
+            } else { userMarker.setLatLng([lat, lng]); }
+            if (gpsFollowing) map.setView([lat, lng], map.getZoom());
+        }, err => console.error(err), { enableHighAccuracy: true, maximumAge: 1000 });
+    }
+    function stopGPSFollow() { gpsFollowing = false; if (watchID) navigator.geolocation.clearWatch(watchID); }
+    function toggleGPSFollow() { gpsFollowing = !gpsFollowing; if (gpsFollowing) startGPSFollow(); else stopGPSFollow(); }
+    startGPSFollow();
 
-            // Reset to "No Vegetation"
-            selectVegetation('no', document.getElementById("btn-no"));
+    // --- Export to KML ---
+    function exportKML() {
+        const kmlHeader = `<?xml version="1.0" encoding="UTF-8"?>\n<kml xmlns="http://www.opengis.net/kml/2.2">\n<Document>\n`;
+        const kmlFooter = "</Document>\n</kml>";
+        const kmlPlacemarks = allPoints.map(p => 
+            `<Placemark><name>${p.type}</name><Point><coordinates>${p.coords[1]},${p.coords[0]},0</coordinates></Point></Placemark>`
+        ).join("\n");
+        const kmlContent = kmlHeader + kmlPlacemarks + "\n" + kmlFooter;
+        const blob = new Blob([kmlContent], {type: "application/vnd.google-earth.kml+xml"});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "vegetation_map.kml";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+    }
+
+    // --- Clear Map ---
+    function clearMap() {
+        allMarkers.forEach(m => map.removeLayer(m));
+        allMarkers.length = 0;
+        allPoints.length = 0;
+        for (let key in totalDistance) {
+            totalDistance[key] = 0;
+            lastPoint[key] = null;
+            const el = document.getElementById("dist-" + key);
+            if (el) el.innerText = "0";
         }
-
-        // Map click handler
-        map.on('click', function(e) {
-            drawVegetation(e.latlng.lat, e.latlng.lng);
-        });
-
-        // Highlight default button
-        lastSelectedButton.classList.add("selected");
-
-        // --- GPS Follow ---
-        function startGPSFollow() {
-            if (!navigator.geolocation) {
-                alert("Geolocation is not supported by your browser");
-                return;
-            }
-
-            navigator.geolocation.watchPosition(
-                (position) => {
-                    const lat = position.coords.latitude;
-                    const lng = position.coords.longitude;
-
-                    // Move the map to follow your position
-                    map.setView([lat, lng], map.getZoom());
-
-                    // Show your location on the map
-                    if (!window.userMarker) {
-                        window.userMarker = L.circle([lat, lng], { radius: 5, color: "blue", fillColor: "blue", fillOpacity: 0.7 }).addTo(map);
-                    } else {
-                        window.userMarker.setLatLng([lat, lng]);
-                    }
-                },
-                (error) => {
-                    console.error("Geolocation error:", error);
-                },
-                { enableHighAccuracy: true, maximumAge: 1000 }
-            );
-        }
-
-        // Start GPS follow
-        startGPSFollow();
-    </script>
+    }
+</script>
 </body>
 </html>
