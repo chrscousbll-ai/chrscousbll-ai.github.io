@@ -7,22 +7,22 @@
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
 <style>
-    body { font-family: Arial, sans-serif; margin: 10px; }
-    #map { height: 600px; width: 100%; margin-top: 10px; }
+body { font-family: Arial, sans-serif; margin: 10px; }
+#map { height: 600px; width: 100%; margin-top: 10px; }
 
-    #buttons { margin-bottom: 10px; }
-    #buttons button {
-        padding: 8px 12px;
-        margin-right: 5px;
-        font-size: 16px;
-        cursor: pointer;
-    }
-    .selected { border: 2px solid black; background-color: #ddd; }
-    .active { border: 2px solid black; background-color: #aaf; }
+#buttons { margin-bottom: 10px; }
+#buttons button {
+    padding: 8px 12px;
+    margin-right: 5px;
+    font-size: 16px;
+    cursor: pointer;
+}
+.selected { border: 2px solid black; background-color: #ddd; }
+.active { border: 2px solid black; background-color: #aaf; }
 
-    #distances { margin-top: 10px; }
-    #distances ul { list-style: none; padding-left: 0; }
-    #distances li { margin-bottom: 5px; }
+#distances { margin-top: 10px; }
+#distances ul { list-style: none; padding-left: 0; }
+#distances li { margin-bottom: 5px; }
 </style>
 </head>
 <body>
@@ -30,33 +30,33 @@
 <h1>Vegetation Mapping Tool</h1>
 
 <div id="buttons">
-    <button id="btn-no" onclick="selectVegetation('no', this)">No Vegetation</button>
-    <button id="btn-light" onclick="selectVegetation('light', this)">Light</button>
-    <button id="btn-moderate" onclick="selectVegetation('moderate', this)">Moderate</button>
-    <button id="btn-heavy" onclick="selectVegetation('heavy', this)">Heavy</button>
-    <button id="btn-dead" onclick="selectVegetation('dead', this)">Dead Tree</button>
-    <button id="btn-start" onclick="startRecording()">Start Recording</button>
-    <button id="btn-stop" onclick="stopRecording()">Stop Recording</button>
-    <button id="btn-gps" onclick="toggleGPSFollow()">GPS Follow</button>
-    <button id="btn-export" onclick="exportKML()">Export KML</button>
-    <button id="btn-clear" onclick="clearMap()">Clear Map</button>
+    <button id="btn-no">No Vegetation</button>
+    <button id="btn-light">Light</button>
+    <button id="btn-moderate">Moderate</button>
+    <button id="btn-heavy">Heavy</button>
+    <button id="btn-dead">Dead Tree</button>
+    <button id="btn-start">Start Recording</button>
+    <button id="btn-stop">Stop Recording</button>
+    <button id="btn-gps">GPS Follow</button>
+    <button id="btn-export">Export KML</button>
+    <button id="btn-clear">Clear Map</button>
 </div>
 
 <div id="map"></div>
 
 <div id="distances">
-    <h3>Distance Traveled (meters)</h3>
-    <ul>
-        <li>No Vegetation: <span id="dist-no">0</span></li>
-        <li>Light: <span id="dist-light">0</span></li>
-        <li>Moderate: <span id="dist-moderate">0</span></li>
-        <li>Heavy: <span id="dist-heavy">0</span></li>
-        <li>Dead Tree: <span id="dist-dead">0</span></li>
-    </ul>
+<h3>Distance Traveled (meters)</h3>
+<ul>
+<li>No Vegetation: <span id="dist-no">0</span></li>
+<li>Light: <span id="dist-light">0</span></li>
+<li>Moderate: <span id="dist-moderate">0</span></li>
+<li>Heavy: <span id="dist-heavy">0</span></li>
+</ul>
 </div>
 
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 <script>
+// Map initialization
 const map = L.map('map').setView([45.0, -68.7], 10);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 19,
@@ -68,25 +68,20 @@ let currentVegetation = 'no';
 let lastSelectedButton = document.getElementById("btn-no");
 let recording = false;
 
-const vegetationColors = {
-    "no": "gray",
-    "light": "green",
-    "moderate": "orange",
-    "heavy": "red"
-};
-
+const vegetationColors = { "no": "gray", "light": "green", "moderate": "orange", "heavy": "red" };
 const lastPoint = { "no": null, "light": null, "moderate": null, "heavy": null };
 const totalDistance = { "no": 0, "light": 0, "moderate": 0, "heavy": 0 };
 const allPoints = [];
 const allMarkers = [];
 
-// Dead tree icon
+// Dead Tree Icon (skull + tree)
 const deadTreeIcon = L.icon({
-    iconUrl: 'https://cdn-icons-png.flaticon.com/512/415/415733.png', // example tree icon
+    iconUrl: 'https://cdn-icons-png.flaticon.com/512/149/149290.png', // skull + tree example
     iconSize: [32, 32],
     iconAnchor: [16, 32]
 });
 
+// --- Vegetation button handlers ---
 function selectVegetation(type, button) {
     currentVegetation = type;
     if (lastSelectedButton) lastSelectedButton.classList.remove("selected");
@@ -94,36 +89,40 @@ function selectVegetation(type, button) {
     lastSelectedButton = button;
 }
 
-function startRecording() { recording = true; alert("Recording started"); }
-function stopRecording() { recording = false; alert("Recording stopped"); }
+// Attach button events
+document.getElementById("btn-no").onclick = () => selectVegetation('no', document.getElementById("btn-no"));
+document.getElementById("btn-light").onclick = () => selectVegetation('light', document.getElementById("btn-light"));
+document.getElementById("btn-moderate").onclick = () => selectVegetation('moderate', document.getElementById("btn-moderate"));
+document.getElementById("btn-heavy").onclick = () => selectVegetation('heavy', document.getElementById("btn-heavy"));
 
+// --- Start / Stop Recording ---
+document.getElementById("btn-start").onclick = () => { recording = true; alert("Recording started"); };
+document.getElementById("btn-stop").onclick = () => { recording = false; alert("Recording stopped"); };
+
+// --- Draw vegetation ---
 function drawVegetation(lat, lng) {
     if (!recording) return;
-    let marker;
-    if (currentVegetation === 'dead') {
-        marker = L.marker([lat, lng], { icon: deadTreeIcon }).addTo(map);
-    } else {
-        const color = vegetationColors[currentVegetation] || "black";
-        marker = L.circle([lat, lng], { radius: 5, color, fillColor: color, fillOpacity: 0.7 }).addTo(map);
-
-        const prev = lastPoint[currentVegetation];
-        if (prev) {
-            const dist = map.distance([lat, lng], prev);
-            totalDistance[currentVegetation] += dist;
-            document.getElementById("dist-" + currentVegetation).innerText = totalDistance[currentVegetation].toFixed(1);
-        }
-        lastPoint[currentVegetation] = [lat, lng];
-    }
+    const color = vegetationColors[currentVegetation] || "black";
+    const marker = L.circle([lat, lng], { radius: 5, color, fillColor: color, fillOpacity: 0.7 }).addTo(map);
     allMarkers.push(marker);
+
+    const prev = lastPoint[currentVegetation];
+    if (prev) {
+        const dist = map.distance([lat, lng], prev);
+        totalDistance[currentVegetation] += dist;
+        document.getElementById("dist-" + currentVegetation).innerText = totalDistance[currentVegetation].toFixed(1);
+    }
+    lastPoint[currentVegetation] = [lat, lng];
     allPoints.push({ type: currentVegetation, coords: [lat, lng] });
 
+    // Reset to no vegetation
     selectVegetation('no', document.getElementById("btn-no"));
 }
 
 map.on('click', e => drawVegetation(e.latlng.lat, e.latlng.lng));
 lastSelectedButton.classList.add("selected");
 
-// GPS Follow
+// --- GPS Follow ---
 let userMarker, watchID;
 let gpsFollowing = true;
 
@@ -146,14 +145,23 @@ function stopGPSFollow() {
     if (watchID) navigator.geolocation.clearWatch(watchID);
 }
 
-function toggleGPSFollow() {
-    gpsFollowing ? stopGPSFollow() : startGPSFollow();
-}
+document.getElementById("btn-gps").onclick = toggleGPSFollow;
+
+function toggleGPSFollow() { gpsFollowing ? stopGPSFollow() : startGPSFollow(); }
 
 startGPSFollow();
 
-// Export KML
-function exportKML() {
+// --- Dead Tree button places icon at GPS ---
+document.getElementById("btn-dead").onclick = () => {
+    if (!userMarker) { alert("GPS position not available"); return; }
+    const latlng = userMarker.getLatLng();
+    const marker = L.marker([latlng.lat, latlng.lng], { icon: deadTreeIcon }).addTo(map);
+    allMarkers.push(marker);
+    allPoints.push({ type: 'dead', coords: [latlng.lat, latlng.lng] });
+};
+
+// --- Export KML ---
+document.getElementById("btn-export").onclick = () => {
     const kmlHeader = `<?xml version="1.0" encoding="UTF-8"?><kml xmlns="http://www.opengis.net/kml/2.2"><Document>`;
     const kmlFooter = "</Document></kml>";
     const kmlPlacemarks = allPoints.map(p => `<Placemark><name>${p.type}</name><Point><coordinates>${p.coords[1]},${p.coords[0]},0</coordinates></Point></Placemark>`).join("\n");
@@ -166,10 +174,10 @@ function exportKML() {
     document.body.appendChild(a);
     a.click();
     a.remove();
-}
+};
 
-// Clear map
-function clearMap() {
+// --- Clear Map ---
+document.getElementById("btn-clear").onclick = () => {
     allMarkers.forEach(m => map.removeLayer(m));
     allMarkers.length = 0;
     allPoints.length = 0;
@@ -179,7 +187,7 @@ function clearMap() {
         const el = document.getElementById("dist-" + key);
         if (el) el.innerText = "0";
     }
-}
+};
 </script>
 </body>
 </html>
