@@ -51,7 +51,7 @@ html, body, #map { height: 100%; margin:0; padding:0; }
   <button id="followBtn">Follow GPS</button>
   <button id="clearLast">Clear Last</button>
   <button id="clearAll">Clear All</button>
-  <button id="exportBtn">Export GeoJSON</button>
+  <button id="exportBtn">Export KML</button>
 </div>
 
 <div id="info">
@@ -177,34 +177,40 @@ function haversine(a,b){ const R=6371000,r=Math.PI/180; const dLat=(b.lat-a.lat)
 document.getElementById("clearLast").onclick=()=>{pathSegments.pop(); renderSegments();};
 document.getElementById("clearAll").onclick=()=>{pathSegments=[]; totalDistance=0; renderSegments();};
 
-// Export GeoJSON - dual file
+// Export KML - dual file for Google My Maps
 document.getElementById('exportBtn').onclick = () => {
-  // Lines
-  const lineFeatures = pathSegments
-    .filter(f => f.category !== "dead")
-    .map(seg => ({
-      type: "Feature",
-      properties: { category: seg.category },
-      geometry: { type: "LineString", coordinates: seg.latlngs.map(pt => [pt.lng, pt.lat]) }
-    }));
 
-  // Points
-  const pointFeatures = pathSegments
-    .filter(f => f.category === "dead")
-    .map(seg => ({
-      type: "Feature",
-      properties: { category: "dead" },
-      geometry: { type: "Point", coordinates: [seg.latlngs[0].lng, seg.latlngs[0].lat] }
-    }));
+  // Helper: LineString to KML
+  function lineToKML(seg) {
+    const coords = seg.latlngs.map(pt => `${pt.lng},${pt.lat},0`).join(' ');
+    return `<Placemark>
+      <name>${seg.category}</name>
+      <LineString><coordinates>${coords}</coordinates></LineString>
+    </Placemark>`;
+  }
 
-  const linesGeoJSON = { type: "FeatureCollection", features: lineFeatures };
-  const pointsGeoJSON = { type: "FeatureCollection", features: pointFeatures };
+  // Helper: Point to KML
+  function pointToKML(seg) {
+    const pt = seg.latlngs[0];
+    return `<Placemark>
+      <name>${seg.category}</name>
+      <Point><coordinates>${pt.lng},${pt.lat},0</coordinates></Point>
+    </Placemark>`;
+  }
 
-  const linesStr = JSON.stringify(linesGeoJSON, null, 2);
-  const pointsStr = JSON.stringify(pointsGeoJSON, null, 2);
+  // Separate features
+  const linePlacemarks = pathSegments.filter(f => f.category !== "dead").map(lineToKML).join('\n');
+  const pointPlacemarks = pathSegments.filter(f => f.category === "dead").map(pointToKML).join('\n');
+
+  // KML wrappers
+  const linesKML = `<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2"><Document>${linePlacemarks}</Document></kml>`;
+
+  const pointsKML = `<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2"><Document>${pointPlacemarks}</Document></kml>`;
 
   const download = (filename, content) => {
-    const blob = new Blob([content], { type: "application/json" });
+    const blob = new Blob([content], { type: "application/vnd.google-earth.kml+xml" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -213,8 +219,9 @@ document.getElementById('exportBtn').onclick = () => {
     URL.revokeObjectURL(url);
   };
 
-  download("veg_paths.geojson", linesStr);
-  download("dead_trees.geojson", pointsStr);
+  // Download both KML files
+  download("veg_paths.kml", linesKML);
+  download("dead_trees.kml", pointsKML);
 };
 </script>
 
