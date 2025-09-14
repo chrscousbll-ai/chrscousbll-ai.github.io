@@ -1,267 +1,251 @@
-<!DOCTYPE html>
+<!doctype html>
 <html>
 <head>
-<meta charset="utf-8">
-<title>Vegetation Mapper</title>
-<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Vegetation Mapping</title>
+
+<!-- PWA meta -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#6ab04c">
+<link rel="apple-touch-icon" href="icon-192.png">
+
+<!-- Leaflet CSS/JS -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
 <style>
-html, body { height:100%; margin:0; padding:0; font-family:sans-serif; }
-#map { height:100%; width:100%; }
-#controls {
-  position:absolute; top:10px; left:10px; z-index:1001;
-  background:rgba(255,255,255,0.95); padding:8px; border-radius:6px;
-  display:flex; flex-direction:column; gap:6px; max-width:180px;
-}
-button { padding:6px; font-size:14px; cursor:pointer; }
-.catActive { box-shadow: inset 0 0 0 2px rgba(0,0,0,0.3); }
-#recordingIndicator { color:red; font-weight:bold; display:none; margin-top:4px; }
-#gpsDisplay {
-  position:absolute; bottom:50px; right:10px; z-index:1001;
-  background:rgba(255,255,255,0.95); padding:8px; border-radius:6px; text-align:right;
-}
-#keyLegend {
-  position:absolute; bottom:10px; left:50%; transform:translateX(-50%);
-  background:rgba(255,255,255,0.95); padding:6px 10px; border-radius:6px;
-  font-size:14px; z-index:1001; max-width:95%; text-align:center;
-}
+  html,body,#map { height:100%; margin:0; padding:0; }
+  #controls {
+    position: absolute;
+    top: 8px; left: 8px;
+    z-index: 1000;
+    background: rgba(255,255,255,0.95);
+    padding:8px; border-radius:6px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+  }
+  #legend {
+    position:absolute;
+    right:8px; top:8px;
+    z-index:1000;
+    background: rgba(255,255,255,0.9);
+    padding:8px; border-radius:6px;
+    cursor: move;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+    user-select:none;
+  }
+  #bottomKey {
+    position: absolute;
+    bottom:8px; left:8px; right:8px;
+    z-index:1000;
+    background: rgba(255,255,255,0.92);
+    padding:8px; border-radius:6px;
+    display:flex; gap:8px; align-items:center; overflow:auto;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+  }
+  .category-btn {
+    padding:6px 8px; border-radius:6px; border:1px solid #ccc; cursor:pointer;
+  }
+  .category-swatch { width:16px; height:16px; display:inline-block; margin-right:6px; vertical-align:middle; border-radius:3px; border:1px solid rgba(0,0,0,0.1) }
+  #status { font-size:13px; margin-top:6px; color:#333 }
+  .small { font-size:12px; color:#666 }
+  button { cursor:pointer; }
+  input[type=file] { display:none; }
 </style>
 </head>
 <body>
+
 <div id="map"></div>
+
 <div id="controls">
-  <button data-cat="light">Light</button>
-  <button data-cat="moderate">Moderate</button>
-  <button data-cat="heavy">Heavy</button>
-  <button data-cat="dead">Dead Tree</button>
-  <button data-cat="clear">Clear</button>
-  <button id="followBtn">Follow GPS: OFF</button>
-  <button id="locationBtn">Show Location: OFF</button>
-  <button id="startBtn">Start</button>
-  <button id="stopBtn">Stop</button>
-  <button id="clearLastBtn">Clear Last</button>
-  <button id="exportBtn">Export</button>
-  <button id="saveBtn">Save</button>
-  <input type="file" id="uploadInput" style="display:none;">
-  <button id="uploadBtn">Upload</button>
-  <div id="recordingIndicator">● Recording...</div>
-</div>
-<div id="gpsDisplay">
-  <div id="coords">Lat: --, Lng: --</div>
-  <div id="distanceDisplay">Total: 0.00 mi</div>
-</div>
-<div id="keyLegend">
-Shortcuts: <b>L</b> Light, <b>M</b> Moderate, <b>H</b> Heavy, <b>D</b> Dead Tree, <b>C</b> Clear, 
-<b>S</b> Start, <b>T</b> Stop, <b>F</b> Follow GPS, <b>O</b> Show Location, <b>K</b> Clear Last, 
-<b>E</b> Export, <b>U</b> Upload, <b>V</b> Save
+  <div style="display:flex; gap:6px; align-items:center;">
+    <button id="startRec">Start Recording</button>
+    <button id="stopRec" disabled>Stop</button>
+    <label><input type="checkbox" id="followToggle"> Follow GPS</label>
+    <button id="clearLast">Clear Last</button>
+    <button id="clearAll">Clear All</button>
+  </div>
+
+  <div style="margin-top:8px; display:flex; gap:6px; align-items:center;">
+    <button id="exportBtn">Export GeoJSON</button>
+    <label class="category-btn">
+      <span id="importLabel">Import GeoJSON</span>
+      <input type="file" id="fileInput" accept=".geojson,.json" />
+    </label>
+    <button id="saveLocal">Save (localStorage)</button>
+    <button id="loadLocal">Load (localStorage)</button>
+  </div>
+
+  <div id="status">
+    <div><strong>Live:</strong> <span id="coords">—</span></div>
+    <div class="small">Category distances: <span id="catDist">—</span> — Total: <span id="totalDist">0.00</span> m</div>
+  </div>
 </div>
 
-<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<div id="legend">
+  <div><strong>Legend (drag me)</strong></div>
+  <div id="legendContent" style="margin-top:6px"></div>
+</div>
+
+<div id="bottomKey"></div>
+
 <script>
-// --- Categories ---
-const CAT_INFO = {
-  light:{color:"green",label:"Light"},
-  moderate:{color:"orange",label:"Moderate"},
-  heavy:{color:"red",label:"Heavy"},
-  dead:{color:"black",label:"Dead Tree"},
-  clear:{color:"blue",label:"Clear"}
+// === Categories config ===
+const CATEGORIES = [
+  { id: 'grass', label: 'Grass', color: '#6ab04c' },
+  { id: 'shrub', label: 'Shrub', color: '#f6b93b' },
+  { id: 'forest', label: 'Forest', color: '#2d98da' },
+  { id: 'water', label: 'Water', color: '#3c40c6' },
+  { id: 'bare', label: 'Bare', color: '#d1ccc0' }
+];
+
+// map init
+const map = L.map('map', { zoomControl:true }).setView([44.8, -68.7], 13);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  maxZoom: 19, attribution: '© OpenStreetMap contributors'
+}).addTo(map);
+
+// state
+let currentCategory = CATEGORIES[0].id;
+let recording = false;
+let watchId = null;
+let pathSegments = [];
+let currentSegment = null;
+const distances = {}; CATEGORIES.forEach(c => distances[c.id] = 0);
+
+// utils
+function haversine(a, b) {
+  const toRad = v => v * Math.PI / 180;
+  const R = 6371000;
+  const dLat = toRad(b.lat - a.lat);
+  const dLon = toRad(b.lng - a.lng);
+  const lat1 = toRad(a.lat);
+  const lat2 = toRad(b.lat);
+  const sinDLat = Math.sin(dLat/2);
+  const sinDLon = Math.sin(dLon/2);
+  const aa = sinDLat*sinDLat + sinDLon*sinDLon * Math.cos(lat1) * Math.cos(lat2);
+  const c = 2 * Math.atan2(Math.sqrt(aa), Math.sqrt(1-aa));
+  return R * c;
+}
+function totalDistance() { return Object.values(distances).reduce((a,b)=>a+b,0); }
+
+// build legend + bottom key
+const legendContent = document.getElementById('legendContent');
+const bottomKey = document.getElementById('bottomKey');
+CATEGORIES.forEach(cat => {
+  const row = document.createElement('div');
+  row.style.marginTop = '6px';
+  row.innerHTML = `<span class="category-swatch" style="background:${cat.color}"></span> <strong>${cat.label}</strong>`;
+  legendContent.appendChild(row);
+
+  const btn = document.createElement('button');
+  btn.className = 'category-btn';
+  btn.id = 'cat_' + cat.id;
+  btn.innerHTML = `<span class="category-swatch" style="background:${cat.color}"></span>${cat.label}`;
+  btn.onclick = () => {
+    currentCategory = cat.id;
+    document.querySelectorAll('.category-btn').forEach(b => b.style.outline = '');
+    btn.style.outline = '3px solid rgba(0,0,0,0.12)';
+  };
+  bottomKey.appendChild(btn);
+});
+document.getElementById('cat_' + currentCategory).style.outline = '3px solid rgba(0,0,0,0.12)';
+
+// layers
+const segmentLayers = L.layerGroup().addTo(map);
+function renderSegments() {
+  segmentLayers.clearLayers();
+  for (const seg of pathSegments) {
+    L.polyline(seg.latlngs, { color: getColorFor(seg.category), weight: 5 }).addTo(segmentLayers);
+  }
+  if (currentSegment) {
+    L.polyline(currentSegment.latlngs, { color: getColorFor(currentSegment.category), weight: 5, dashArray: '6 4' }).addTo(segmentLayers);
+  }
+  updateStatus();
+}
+function getColorFor(catId) {
+  const c = CATEGORIES.find(x=>x.id===catId); return c ? c.color : '#000';
+}
+
+// UI elements
+const startRecBtn = document.getElementById('startRec');
+const stopRecBtn = document.getElementById('stopRec');
+const followToggle = document.getElementById('followToggle');
+const coordsEl = document.getElementById('coords');
+const catDistEl = document.getElementById('catDist');
+const totalDistEl = document.getElementById('totalDist');
+
+// geolocation
+startRecBtn.onclick = () => {
+  if (recording) return;
+  recording = true;
+  startRecBtn.disabled = true;
+  stopRecBtn.disabled = false;
+  currentSegment = { category: currentCategory, latlngs: [] };
+  if ('geolocation' in navigator) {
+    watchId = navigator.geolocation.watchPosition(onPos, console.error, { enableHighAccuracy:true });
+  } else alert('Geolocation not available.');
+};
+stopRecBtn.onclick = () => {
+  recording = false;
+  startRecBtn.disabled = false;
+  stopRecBtn.disabled = true;
+  if (watchId) { navigator.geolocation.clearWatch(watchId); watchId = null; }
+  if (currentSegment && currentSegment.latlngs.length) {
+    pathSegments.push(currentSegment); currentSegment = null; renderSegments();
+  }
+};
+function onPos(p) {
+  const latlng = { lat:p.coords.latitude, lng:p.coords.longitude };
+  coordsEl.textContent = `${latlng.lat.toFixed(6)}, ${latlng.lng.toFixed(6)}`;
+  if (recording) {
+    if (!currentSegment || currentSegment.category !== currentCategory) {
+      if (currentSegment && currentSegment.latlngs.length) pathSegments.push(currentSegment);
+      currentSegment = { category: currentCategory, latlngs: [] };
+    }
+    const arr = currentSegment.latlngs;
+    if (arr.length>0) distances[currentSegment.category]+=haversine(arr[arr.length-1], latlng);
+    arr.push(latlng); renderSegments();
+  }
+  if (followToggle.checked) map.setView([latlng.lat, latlng.lng], map.getZoom(), { animate:true });
+}
+function updateStatus() {
+  catDistEl.textContent = CATEGORIES.map(c => `${c.label}:${distances[c.id].toFixed(1)}m`).join(", ");
+  totalDistEl.textContent = totalDistance().toFixed(1);
+}
+
+// clear buttons
+document.getElementById('clearLast').onclick = () => { pathSegments.pop(); renderSegments(); };
+document.getElementById('clearAll').onclick = () => { pathSegments=[]; renderSegments(); };
+
+// Export/Import
+document.getElementById('exportBtn').onclick = () => {
+  const data = { type:"FeatureCollection", features: pathSegments.map(seg => ({
+    type:"Feature", properties:{category:seg.category}, geometry:{type:"LineString", coordinates:seg.latlngs.map(pt=>[pt.lng, pt.lat])}
+  }))};
+  const blob = new Blob([JSON.stringify(data)], {type:"application/json"});
+  const url = URL.createObjectURL(blob);
+  const a=document.createElement('a'); a.href=url; a.download="vegmap.geojson"; a.click(); URL.revokeObjectURL(url);
+};
+document.getElementById('fileInput').onchange = e => {
+  const file=e.target.files[0]; if (!file) return;
+  const reader=new FileReader(); reader.onload=ev=>{
+    const geo=JSON.parse(ev.target.result);
+    geo.features.forEach(f=>{
+      if (f.geometry.type==="LineString") {
+        const coords=f.geometry.coordinates.map(c=>({lat:c[1], lng:c[0]}));
+        pathSegments.push({category:f.properties.category||'unknown', latlngs:coords});
+      }
+    }); renderSegments();
+  }; reader.readAsText(file);
 };
 
-// --- Map ---
-const map = L.map('map').setView([44.809, -68.885], 13);
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19, attribution:'© OpenStreetMap'}).addTo(map);
-
-// --- State ---
-let currentCategory='light', recording=false, currentLine=null, segments=[], watchId=null, followGPS=false;
-let locationWatchId=null, locationMarker=null;
-const distanceTracker={light:0, moderate:0, heavy:0, clear:0};
-let centeredOnce=false;
-
-// --- Utilities ---
-function toMilesMeters(d){return d/1000*0.621371;}
-function distanceBetween(a,b){
-  const R=6371e3,toRad=d=>d*Math.PI/180;
-  const φ1=toRad(a[0]),φ2=toRad(b[0]);
-  const Δφ=toRad(b[0]-a[0]),Δλ=toRad(b[1]-a[1]);
-  const h=Math.sin(Δφ/2)**2 + Math.cos(φ1)*Math.cos(φ2)*Math.sin(Δλ/2)**2;
-  return toMilesMeters(2*R*Math.atan2(Math.sqrt(h),Math.sqrt(1-h)));
+// Register service worker
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('service-worker.js');
 }
-function updateGPSDisplay(lat,lng){
-  document.getElementById('coords').innerText=`Lat: ${lat.toFixed(5)}, Lng: ${lng.toFixed(5)}`;
-  if(followGPS) map.setView([lat,lng],map.getZoom());
-  if(!centeredOnce){ map.setView([lat,lng],16); centeredOnce=true; }
-}
-function totalDistanceMiles(){ return Object.values(distanceTracker).reduce((a,b)=>a+b,0); }
-function updateDistanceDisplay(){ document.getElementById('distanceDisplay').innerText=`Total: ${totalDistanceMiles().toFixed(2)} mi`; }
-function highlightCategory(){
-  document.querySelectorAll('#controls button[data-cat]').forEach(b=>b.classList.remove('catActive'));
-  const btn=document.querySelector(`#controls button[data-cat="${currentCategory}"]`);
-  if(btn) btn.classList.add('catActive');
-}
-
-// --- Save/Load ---
-function saveSegments(){
-  const toSave = segments.map(s=>{
-    const obj = {category:s.category, coords:s.coords};
-    if(s.tStart) obj.tStart = s.tStart;
-    if(s.tEnd) obj.tEnd = s.tEnd;
-    return obj;
-  });
-  localStorage.setItem('vegetation_segments', JSON.stringify(toSave));
-}
-function loadSegments(){
-  const data = localStorage.getItem('vegetation_segments');
-  if(!data) return;
-  const arr = JSON.parse(data);
-  arr.forEach(s=>{
-    if(s.category === 'dead'){
-      const marker = L.circleMarker(s.coords[0], {color:'black', radius:7, fillOpacity:0.9}).addTo(map);
-      segments.push({category:'dead', coords:s.coords, marker:marker});
-    } else {
-      const poly = L.polyline(s.coords, {color:CAT_INFO[s.category].color, weight:5}).addTo(map);
-      segments.push({category:s.category, coords:s.coords, polyline:poly, tStart:s.tStart, tEnd:s.tEnd});
-      for(let i=1;i<s.coords.length;i++){
-        const d = distanceBetween(s.coords[i-1], s.coords[i]);
-        distanceTracker[s.category] = (distanceTracker[s.category]||0)+d;
-      }
-    }
-  });
-  updateDistanceDisplay();
-}
-
-// --- Load saved data ---
-loadSegments();
-
-// --- Category selection ---
-document.querySelectorAll('#controls button[data-cat]').forEach(btn=>{
-  btn.addEventListener('click',()=>{
-    currentCategory=btn.dataset.cat;
-    highlightCategory();
-    if(watchId){ endSegment(); if(currentCategory!=='dead') startSegment(currentCategory);}
-  });
-});
-highlightCategory();
-
-// --- Segment functions ---
-function startSegment(cat){
-  if(cat==='dead') return;
-  const poly=L.polyline([], {color:CAT_INFO[cat].color, weight:5}).addTo(map);
-  currentLine={category:cat, coords:[], polyline:poly, tStart:new Date().toISOString(), tEnd:null};
-  segments.push(currentLine);
-}
-function endSegment(){ if(currentLine){currentLine.tEnd=new Date().toISOString(); currentLine=null; saveSegments(); } }
-
-// --- Dead tree ---
-function placeDeadTree(lat,lng){
-  const marker=L.circleMarker([lat,lng],{color:'black',radius:7,fillOpacity:0.9}).addTo(map);
-  const seg={category:'dead',coords:[[lat,lng]],marker:marker, t:new Date().toISOString()};
-  segments.push(seg);
-  saveSegments();
-}
-
-// --- Recording ---
-function startRecording(){
-  if(watchId) return;
-  currentLine=null;
-  if(currentCategory!=='dead') startSegment(currentCategory);
-  document.getElementById('recordingIndicator').style.display='block';
-  watchId=navigator.geolocation.watchPosition(pos=>{
-    const lat=pos.coords.latitude, lng=pos.coords.longitude;
-    updateGPSDisplay(lat,lng);
-    if(currentCategory==='dead'){ placeDeadTree(lat,lng); return; }
-    if(!currentLine) startSegment(currentCategory);
-    const coords=currentLine.coords;
-    if(coords.length>0){ const d=distanceBetween(coords[coords.length-1],[lat,lng]); distanceTracker[currentLine.category]+=(d||0); updateDistanceDisplay();}
-    coords.push([lat,lng]);
-    currentLine.polyline.addLatLng([lat,lng]);
-    currentLine.tEnd=new Date().toISOString();
-    saveSegments();
-  }, err=>console.log(err), {enableHighAccuracy:true, maximumAge:1000, timeout:10000});
-}
-function stopRecording(){
-  if(watchId){navigator.geolocation.clearWatch(watchId); watchId=null;}
-  endSegment(); currentLine=null;
-  document.getElementById('recordingIndicator').style.display='none';
-}
-
-// --- Buttons ---
-document.getElementById('startBtn').addEventListener('click',startRecording);
-document.getElementById('stopBtn').addEventListener('click',stopRecording);
-document.getElementById('followBtn').addEventListener('click',()=>{
-  followGPS=!followGPS;
-  document.getElementById('followBtn').innerText=`Follow GPS: ${followGPS?'ON':'OFF'}`;
-});
-document.getElementById('locationBtn').addEventListener('click',()=>{
-  if(locationWatchId){navigator.geolocation.clearWatch(locationWatchId);locationWatchId=null;if(locationMarker){map.removeLayer(locationMarker);locationMarker=null;} document.getElementById('locationBtn').innerText='Show Location: OFF'; return;}
-  locationWatchId=navigator.geolocation.watchPosition(pos=>{
-    const lat=pos.coords.latitude,lng=pos.coords.longitude;
-    if(!locationMarker) locationMarker=L.circleMarker([lat,lng],{radius:6,color:'blue',fillColor:'blue',fillOpacity:0.8}).addTo(map);
-    else locationMarker.setLatLng([lat,lng]);
-    updateGPSDisplay(lat,lng);
-    if(followGPS) map.setView([lat,lng], map.getZoom());
-  }, err=>console.log(err), {enableHighAccuracy:true, maximumAge:1000, timeout:10000});
-  document.getElementById('locationBtn').innerText='Show Location: ON';
-});
-document.getElementById('clearLastBtn').addEventListener('click',()=>{
-  const last=segments.pop(); if(!last) return;
-  if(last.polyline) map.removeLayer(last.polyline);
-  if(last.marker) map.removeLayer(last.marker);
-  updateDistanceDisplay();
-  saveSegments();
-});
-document.getElementById('exportBtn').addEventListener('click',()=>{
-  const exportData = segments.map(s=>({category:s.category, coords:s.coords, tStart:s.tStart, tEnd:s.tEnd}));
-  const blob = new Blob([JSON.stringify(exportData,null,2)], {type:"application/json"});
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a'); a.href=url; a.download='vegetation_export.json'; a.click(); URL.revokeObjectURL(url);
-});
-document.getElementById('saveBtn').addEventListener('click',()=>{
-  saveSegments();
-  alert('Map saved locally.');
-});
-document.getElementById('uploadBtn').addEventListener('click',()=>{document.getElementById('uploadInput').click();});
-document.getElementById('uploadInput').addEventListener('change', e=>{
-  const file=e.target.files[0];
-  if(!file) return;
-  const reader = new FileReader();
-  reader.onload = ev=>{
-    const data = JSON.parse(ev.target.result);
-    segments.forEach(s=>{if(s.polyline) map.removeLayer(s.polyline); if(s.marker) map.removeLayer(s.marker);});
-    segments=[]; for(const k in distanceTracker) distanceTracker[k]=0;
-    data.forEach(s=>{
-      if(s.category==='dead'){
-        const marker=L.circleMarker(s.coords[0],{color:'black',radius:7,fillOpacity:0.9}).addTo(map);
-        segments.push({category:'dead', coords:s.coords, marker:marker});
-      } else {
-        const poly=L.polyline(s.coords,{color:CAT_INFO[s.category].color,weight:5}).addTo(map);
-        segments.push({category:s.category, coords:s.coords, polyline:poly, tStart:s.tStart, tEnd:s.tEnd});
-        for(let i=1;i<s.coords.length;i++){
-          const d=distanceBetween(s.coords[i-1],s.coords[i]);
-          distanceTracker[s.category]+=(d||0);
-        }
-      }
-    });
-    updateDistanceDisplay(); saveSegments();
-  };
-  reader.readAsText(file);
-});
-
-// --- Keyboard shortcuts ---
-document.addEventListener('keydown', ev=>{
-  const k=ev.key.toLowerCase();
-  if(k==='l'){currentCategory='light';highlightCategory();}
-  if(k==='m'){currentCategory='moderate';highlightCategory();}
-  if(k==='h'){currentCategory='heavy';highlightCategory();}
-  if(k==='d'){currentCategory='dead';highlightCategory();}
-  if(k==='c'){currentCategory='clear';highlightCategory();}
-  if(k==='s'){startRecording();}
-  if(k==='t'){stopRecording();}
-  if(k==='f'){document.getElementById('followBtn').click();}
-  if(k==='o'){document.getElementById('locationBtn').click();}
-  if(k==='k'){document.getElementById('clearLastBtn').click();}
-  if(k==='e'){document.getElementById('exportBtn').click();}
-  if(k==='v'){document.getElementById('saveBtn').click();}
-  if(k==='u'){document.getElementById('uploadBtn').click();}
-});
 </script>
 </body>
 </html>
