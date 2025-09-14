@@ -15,7 +15,6 @@ html, body, #map { height: 100%; margin: 0; padding: 0; }
   box-shadow: 0 2px 6px rgba(0,0,0,0.3); font-family: system-ui;
 }
 #controls > div { display:flex; flex-wrap:wrap; gap:12px; align-items:center; }
-#controls label { font-size:16px; display:flex; align-items:center; gap:6px; }
 
 button {
   padding:12px 16px;
@@ -24,6 +23,10 @@ button {
   border:1px solid #ccc;
   cursor:pointer;
   white-space:nowrap;
+}
+
+button.active {
+  outline: 3px solid black;
 }
 
 #status { font-size:14px; margin-top:8px; color:#333; }
@@ -43,9 +46,8 @@ button {
 
   <!-- Functional buttons -->
   <div>
-    <button id="startRec">Start Recording</button>
-    <button id="stopRec" disabled>Stop</button>
-    <label><input type="checkbox" id="followToggle"> Follow GPS</label>
+    <button id="recBtn">Start Recording</button>
+    <button id="followBtn">Follow GPS</button>
     <button id="clearLast">Clear Last</button>
     <button id="clearAll">Clear All</button>
   </div>
@@ -93,8 +95,12 @@ if ("geolocation" in navigator) {
   map.setView([44.8, -68.7], 13); // fallback if no GPS
 }
 
-let recording=false, watchId=null, pathSegments=[], currentSegment=null;
-let totalDistance=0;
+let recording = false;
+let followGPS = false;
+let watchId = null;
+let pathSegments = [];
+let currentSegment = null;
+let totalDistance = 0;
 
 function haversine(a,b){
   const r=Math.PI/180,R=6371000,dLat=(b.lat-a.lat)*r,dLon=(b.lng-a.lng)*r,lat1=a.lat*r,lat2=b.lat*r;
@@ -114,35 +120,61 @@ function renderSegments(){
   updateStatus();
 }
 
-const startRecBtn=document.getElementById('startRec');
-const stopRecBtn=document.getElementById('stopRec');
-const followToggle=document.getElementById('followToggle');
+const recBtn=document.getElementById('recBtn');
+const followBtn=document.getElementById('followBtn');
 const coordsEl=document.getElementById('coords');
 const totalDistEl=document.getElementById('totalDist');
 
-startRecBtn.onclick=()=>{
-  if(recording) return;
-  recording=true; startRecBtn.disabled=true; stopRecBtn.disabled=false;
-  currentSegment={category:currentCategory,latlngs:[]};
-  if('geolocation' in navigator) watchId=navigator.geolocation.watchPosition(onPos,console.error,{enableHighAccuracy:true});
-  else alert('Geolocation not available.');
+// Recording toggle
+recBtn.onclick = () => {
+  recording = !recording;
+  
+  if (recording) {
+    recBtn.textContent = "Stop Recording";
+    recBtn.classList.add("active");
+    currentSegment = { category: currentCategory, latlngs: [] };
+    
+    if ('geolocation' in navigator) {
+      watchId = navigator.geolocation.watchPosition(onPos, console.error, { enableHighAccuracy: true });
+    } else {
+      alert("Geolocation not available.");
+    }
+  } else {
+    recBtn.textContent = "Start Recording";
+    recBtn.classList.remove("active");
+    
+    if (watchId) {
+      navigator.geolocation.clearWatch(watchId);
+      watchId = null;
+    }
+    if (currentSegment && currentSegment.latlngs.length) {
+      pathSegments.push(currentSegment);
+      currentSegment = null;
+      renderSegments();
+    }
+  }
 };
 
-stopRecBtn.onclick=()=>{
-  recording=false; startRecBtn.disabled=false; stopRecBtn.disabled=true;
-  if(watchId){navigator.geolocation.clearWatch(watchId); watchId=null;}
-  if(currentSegment && currentSegment.latlngs.length){pathSegments.push(currentSegment); currentSegment=null; renderSegments();}
+// Follow GPS toggle
+followBtn.onclick = () => {
+  followGPS = !followGPS;
+  followBtn.classList.toggle("active", followGPS);
 };
 
 function onPos(p){
   const latlng={lat:p.coords.latitude,lng:p.coords.longitude};
   coordsEl.textContent=`${latlng.lat.toFixed(6)}, ${latlng.lng.toFixed(6)}`;
+  
   if(recording){
     const arr=currentSegment.latlngs;
     if(arr.length>0) totalDistance+=haversine(arr[arr.length-1],latlng);
-    arr.push(latlng); renderSegments();
+    arr.push(latlng);
+    renderSegments();
   }
-  if(followToggle.checked) map.setView([latlng.lat,latlng.lng],map.getZoom(),{animate:true});
+  
+  if(followGPS) {
+    map.setView([latlng.lat, latlng.lng], map.getZoom(), { animate: true });
+  }
 }
 
 function updateStatus(){ totalDistEl.textContent=totalDistance.toFixed(1); }
@@ -177,10 +209,13 @@ document.getElementById('loadLocal').onclick=()=>{const data=localStorage.getIte
 document.querySelectorAll('.catBtn').forEach(btn=>{
   btn.onclick=()=>{
     currentCategory=btn.dataset.cat;
-    document.querySelectorAll('.catBtn').forEach(b=>b.style.outline="none");
-    btn.style.outline="3px solid black";
+    document.querySelectorAll('.catBtn').forEach(b=>b.classList.remove("active"));
+    btn.classList.add("active");
   };
 });
+
+// Set Light as default selected
+document.querySelector('.catBtn[data-cat="light"]').classList.add("active");
 </script>
 </body>
 </html>
