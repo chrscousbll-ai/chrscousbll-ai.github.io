@@ -3,23 +3,16 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Vegetation Mapping Tool</title>
+<title>GPS Vegetation Mapping</title>
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
 <style>
 body { font-family: Arial, sans-serif; margin: 10px; }
 #map { height: 600px; width: 100%; margin-top: 10px; }
-
 #buttons { margin-bottom: 10px; }
-#buttons button {
-    padding: 8px 12px;
-    margin-right: 5px;
-    font-size: 16px;
-    cursor: pointer;
-}
+#buttons button { padding: 8px 12px; margin-right: 5px; font-size: 16px; cursor: pointer; }
 .selected { border: 2px solid black; background-color: #ddd; }
 .active { border: 2px solid black; background-color: #aaf; }
-
 #distances { margin-top: 10px; }
 #distances ul { list-style: none; padding-left: 0; }
 #distances li { margin-bottom: 5px; }
@@ -27,7 +20,7 @@ body { font-family: Arial, sans-serif; margin: 10px; }
 </head>
 <body>
 
-<h1>Vegetation Mapping Tool</h1>
+<h1>GPS Vegetation Mapping</h1>
 
 <div id="buttons">
     <button id="btn-no">No Vegetation</button>
@@ -35,8 +28,6 @@ body { font-family: Arial, sans-serif; margin: 10px; }
     <button id="btn-moderate">Moderate</button>
     <button id="btn-heavy">Heavy</button>
     <button id="btn-dead">Dead Tree</button>
-    <button id="btn-start">Start Recording</button>
-    <button id="btn-stop">Stop Recording</button>
     <button id="btn-gps">GPS Follow</button>
     <button id="btn-export">Export KML</button>
     <button id="btn-clear">Clear Map</button>
@@ -56,30 +47,31 @@ body { font-family: Arial, sans-serif; margin: 10px; }
 
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 <script>
-// Map initialization
-const map = L.map('map').setView([45.0, -68.7], 10);
+// Map setup
+const map = L.map('map').setView([45.0, -68.7], 12);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 19,
     attribution: '© OpenStreetMap'
 }).addTo(map);
 
-// Vegetation
-let currentVegetation = 'no';
-let lastSelectedButton = document.getElementById("btn-no");
-let recording = false;
+// Vegetation colors
+const vegetationColors = { "no":"gray", "light":"green", "moderate":"orange", "heavy":"red" };
+let currentVegetation = null;
+let lastSelectedButton = null;
 
-const vegetationColors = { "no": "gray", "light": "green", "moderate": "orange", "heavy": "red" };
-const lastPoint = { "no": null, "light": null, "moderate": null, "heavy": null };
+// Tracking data
+let userMarker = null;
+let watchID = null;
+let gpsFollowing = true;
+const vegetationPaths = { "no": null, "light": null, "moderate": null, "heavy": null };
+const vegetationLatLngs = { "no": [], "light": [], "moderate": [], "heavy": [] };
 const totalDistance = { "no": 0, "light": 0, "moderate": 0, "heavy": 0 };
-const allPoints = [];
-const allMarkers = [];
-
-// Dead Tree Icon (skull + tree)
 const deadTreeIcon = L.icon({
-    iconUrl: 'https://cdn-icons-png.flaticon.com/512/149/149290.png', // skull + tree example
-    iconSize: [32, 32],
-    iconAnchor: [16, 32]
+    iconUrl: 'https://cdn-icons-png.flaticon.com/512/149/149290.png',
+    iconSize: [32,32],
+    iconAnchor: [16,32]
 });
+const deadTreeMarkers = [];
 
 // --- Vegetation button handlers ---
 function selectVegetation(type, button) {
@@ -87,107 +79,100 @@ function selectVegetation(type, button) {
     if (lastSelectedButton) lastSelectedButton.classList.remove("selected");
     button.classList.add("selected");
     lastSelectedButton = button;
+
+    // Start path if it doesn't exist
+    if (!vegetationPaths[type]) {
+        vegetationPaths[type] = L.polyline([], { color: vegetationColors[type], weight: 5 }).addTo(map);
+    }
 }
 
-// Attach button events
 document.getElementById("btn-no").onclick = () => selectVegetation('no', document.getElementById("btn-no"));
 document.getElementById("btn-light").onclick = () => selectVegetation('light', document.getElementById("btn-light"));
 document.getElementById("btn-moderate").onclick = () => selectVegetation('moderate', document.getElementById("btn-moderate"));
 document.getElementById("btn-heavy").onclick = () => selectVegetation('heavy', document.getElementById("btn-heavy"));
 
-// --- Start / Stop Recording ---
-document.getElementById("btn-start").onclick = () => { recording = true; alert("Recording started"); };
-document.getElementById("btn-stop").onclick = () => { recording = false; alert("Recording stopped"); };
-
-// --- Draw vegetation ---
-function drawVegetation(lat, lng) {
-    if (!recording) return;
-    const color = vegetationColors[currentVegetation] || "black";
-    const marker = L.circle([lat, lng], { radius: 5, color, fillColor: color, fillOpacity: 0.7 }).addTo(map);
-    allMarkers.push(marker);
-
-    const prev = lastPoint[currentVegetation];
-    if (prev) {
-        const dist = map.distance([lat, lng], prev);
-        totalDistance[currentVegetation] += dist;
-        document.getElementById("dist-" + currentVegetation).innerText = totalDistance[currentVegetation].toFixed(1);
-    }
-    lastPoint[currentVegetation] = [lat, lng];
-    allPoints.push({ type: currentVegetation, coords: [lat, lng] });
-
-    // Reset to no vegetation
-    selectVegetation('no', document.getElementById("btn-no"));
-}
-
-map.on('click', e => drawVegetation(e.latlng.lat, e.latlng.lng));
-lastSelectedButton.classList.add("selected");
-
 // --- GPS Follow ---
-let userMarker, watchID;
-let gpsFollowing = true;
-
 function startGPSFollow() {
     gpsFollowing = true;
     document.getElementById("btn-gps").classList.add("active");
     if (!navigator.geolocation) { alert("Geolocation not supported"); return; }
-    watchID = navigator.geolocation.watchPosition(pos => {
-        const lat = pos.coords.latitude;
-        const lng = pos.coords.longitude;
-        if (!userMarker) userMarker = L.circle([lat, lng], { radius: 5, color: "blue", fillColor: "blue", fillOpacity: 0.7 }).addTo(map);
-        else userMarker.setLatLng([lat, lng]);
-        if (gpsFollowing) map.setView([lat, lng], map.getZoom());
-    }, err => console.error(err), { enableHighAccuracy: true, maximumAge: 1000 });
+    watchID = navigator.geolocation.watchPosition(updateGPS, err=>console.error(err), { enableHighAccuracy:true, maximumAge:1000 });
+}
+function stopGPSFollow() { gpsFollowing=false; document.getElementById("btn-gps").classList.remove("active"); if (watchID) navigator.geolocation.clearWatch(watchID); }
+document.getElementById("btn-gps").onclick = () => gpsFollowing ? stopGPSFollow() : startGPSFollow();
+
+function updateGPS(position) {
+    const lat = position.coords.latitude;
+    const lng = position.coords.longitude;
+
+    if (!userMarker) {
+        userMarker = L.circle([lat,lng], { radius:5, color:"blue", fillColor:"blue", fillOpacity:0.7 }).addTo(map);
+    } else {
+        userMarker.setLatLng([lat,lng]);
+    }
+
+    if (gpsFollowing) map.setView([lat,lng], map.getZoom());
+
+    // Update current vegetation path if any
+    if (currentVegetation) {
+        const path = vegetationPaths[currentVegetation];
+        const latlngs = vegetationLatLngs[currentVegetation];
+        if (latlngs.length > 0) {
+            const lastPoint = latlngs[latlngs.length-1];
+            const dist = map.distance([lat,lng], lastPoint);
+            totalDistance[currentVegetation] += dist;
+            document.getElementById("dist-" + currentVegetation).innerText = totalDistance[currentVegetation].toFixed(1);
+        }
+        vegetationLatLngs[currentVegetation].push([lat,lng]);
+        path.addLatLng([lat,lng]);
+    }
 }
 
-function stopGPSFollow() {
-    gpsFollowing = false;
-    document.getElementById("btn-gps").classList.remove("active");
-    if (watchID) navigator.geolocation.clearWatch(watchID);
-}
-
-document.getElementById("btn-gps").onclick = toggleGPSFollow;
-
-function toggleGPSFollow() { gpsFollowing ? stopGPSFollow() : startGPSFollow(); }
-
-startGPSFollow();
-
-// --- Dead Tree button places icon at GPS ---
+// --- Dead Tree button ---
 document.getElementById("btn-dead").onclick = () => {
-    if (!userMarker) { alert("GPS position not available"); return; }
+    if (!userMarker) { alert("GPS not ready"); return; }
     const latlng = userMarker.getLatLng();
     const marker = L.marker([latlng.lat, latlng.lng], { icon: deadTreeIcon }).addTo(map);
-    allMarkers.push(marker);
-    allPoints.push({ type: 'dead', coords: [latlng.lat, latlng.lng] });
+    deadTreeMarkers.push(marker);
 };
 
 // --- Export KML ---
 document.getElementById("btn-export").onclick = () => {
     const kmlHeader = `<?xml version="1.0" encoding="UTF-8"?><kml xmlns="http://www.opengis.net/kml/2.2"><Document>`;
     const kmlFooter = "</Document></kml>";
-    const kmlPlacemarks = allPoints.map(p => `<Placemark><name>${p.type}</name><Point><coordinates>${p.coords[1]},${p.coords[0]},0</coordinates></Point></Placemark>`).join("\n");
+    let kmlPlacemarks = "";
+
+    // Paths
+    for (let type in vegetationLatLngs) {
+        const coords = vegetationLatLngs[type].map(p => `${p[1]},${p[0]},0`).join(" ");
+        if (coords.length>0) {
+            kmlPlacemarks += `<Placemark><name>${type}</name><LineString><coordinates>${coords}</coordinates></LineString></Placemark>`;
+        }
+    }
+
+    // Dead trees
+    for (const marker of deadTreeMarkers) {
+        const pos = marker.getLatLng();
+        kmlPlacemarks += `<Placemark><name>dead</name><Point><coordinates>${pos.lng},${pos.lat},0</coordinates></Point></Placemark>`;
+    }
+
     const kmlContent = kmlHeader + kmlPlacemarks + kmlFooter;
-    const blob = new Blob([kmlContent], {type: "application/vnd.google-earth.kml+xml"});
+    const blob = new Blob([kmlContent], {type:"application/vnd.google-earth.kml+xml"});
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
-    a.href = url;
-    a.download = "vegetation_map.kml";
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
+    a.href = url; a.download = "vegetation_map.kml"; document.body.appendChild(a); a.click(); a.remove();
 };
 
 // --- Clear Map ---
 document.getElementById("btn-clear").onclick = () => {
-    allMarkers.forEach(m => map.removeLayer(m));
-    allMarkers.length = 0;
-    allPoints.length = 0;
-    for (let key in totalDistance) {
-        totalDistance[key] = 0;
-        lastPoint[key] = null;
-        const el = document.getElementById("dist-" + key);
-        if (el) el.innerText = "0";
+    for (let type in vegetationPaths) {
+        if (vegetationPaths[type]) { map.removeLayer(vegetationPaths[type]); vegetationPaths[type]=null; vegetationLatLngs[type]=[]; totalDistance[type]=0; document.getElementById("dist-" + type).innerText="0"; }
     }
+    for (const marker of deadTreeMarkers) map.removeLayer(marker);
+    deadTreeMarkers.length = 0;
 };
+
+startGPSFollow();
 </script>
 </body>
 </html>
