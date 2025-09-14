@@ -10,10 +10,7 @@
     body { font-family: Arial, sans-serif; margin: 10px; }
     #map { height: 600px; width: 100%; margin-top: 10px; }
 
-    /* Old button layout */
-    #buttons {
-        margin-bottom: 10px;
-    }
+    #buttons { margin-bottom: 10px; }
     #buttons button {
         padding: 8px 12px;
         margin-right: 5px;
@@ -21,6 +18,7 @@
         cursor: pointer;
     }
     .selected { border: 2px solid black; background-color: #ddd; }
+    .active { border: 2px solid black; background-color: #aaf; }
 
     #distances { margin-top: 10px; }
     #distances ul { list-style: none; padding-left: 0; }
@@ -31,7 +29,6 @@
 
 <h1>Vegetation Mapping Tool</h1>
 
-<!-- Vegetation buttons -->
 <div id="buttons">
     <button id="btn-no" onclick="selectVegetation('no', this)">No Vegetation</button>
     <button id="btn-light" onclick="selectVegetation('light', this)">Light</button>
@@ -75,14 +72,20 @@ const vegetationColors = {
     "no": "gray",
     "light": "green",
     "moderate": "orange",
-    "heavy": "red",
-    "dead": "brown"
+    "heavy": "red"
 };
 
-const lastPoint = { "no": null, "light": null, "moderate": null, "heavy": null, "dead": null };
-const totalDistance = { "no": 0, "light": 0, "moderate": 0, "heavy": 0, "dead": 0 };
+const lastPoint = { "no": null, "light": null, "moderate": null, "heavy": null };
+const totalDistance = { "no": 0, "light": 0, "moderate": 0, "heavy": 0 };
 const allPoints = [];
 const allMarkers = [];
+
+// Dead tree icon
+const deadTreeIcon = L.icon({
+    iconUrl: 'https://cdn-icons-png.flaticon.com/512/415/415733.png', // example tree icon
+    iconSize: [32, 32],
+    iconAnchor: [16, 32]
+});
 
 function selectVegetation(type, button) {
     currentVegetation = type;
@@ -95,22 +98,25 @@ function startRecording() { recording = true; alert("Recording started"); }
 function stopRecording() { recording = false; alert("Recording stopped"); }
 
 function drawVegetation(lat, lng) {
-    if (!recording) return; // only record when active
-    const color = vegetationColors[currentVegetation] || "black";
-    const marker = L.circle([lat, lng], { radius: 5, color, fillColor: color, fillOpacity: 0.7 }).addTo(map);
-    allMarkers.push(marker);
+    if (!recording) return;
+    let marker;
+    if (currentVegetation === 'dead') {
+        marker = L.marker([lat, lng], { icon: deadTreeIcon }).addTo(map);
+    } else {
+        const color = vegetationColors[currentVegetation] || "black";
+        marker = L.circle([lat, lng], { radius: 5, color, fillColor: color, fillOpacity: 0.7 }).addTo(map);
 
-    const prev = lastPoint[currentVegetation];
-    if (prev) {
-        const dist = map.distance([lat, lng], prev);
-        totalDistance[currentVegetation] += dist;
-        document.getElementById("dist-" + currentVegetation).innerText = totalDistance[currentVegetation].toFixed(1);
+        const prev = lastPoint[currentVegetation];
+        if (prev) {
+            const dist = map.distance([lat, lng], prev);
+            totalDistance[currentVegetation] += dist;
+            document.getElementById("dist-" + currentVegetation).innerText = totalDistance[currentVegetation].toFixed(1);
+        }
+        lastPoint[currentVegetation] = [lat, lng];
     }
-    lastPoint[currentVegetation] = [lat, lng];
-
+    allMarkers.push(marker);
     allPoints.push({ type: currentVegetation, coords: [lat, lng] });
 
-    // Reset to No Vegetation
     selectVegetation('no', document.getElementById("btn-no"));
 }
 
@@ -120,9 +126,11 @@ lastSelectedButton.classList.add("selected");
 // GPS Follow
 let userMarker, watchID;
 let gpsFollowing = true;
+
 function startGPSFollow() {
-    if (!navigator.geolocation) { alert("Geolocation not supported"); return; }
     gpsFollowing = true;
+    document.getElementById("btn-gps").classList.add("active");
+    if (!navigator.geolocation) { alert("Geolocation not supported"); return; }
     watchID = navigator.geolocation.watchPosition(pos => {
         const lat = pos.coords.latitude;
         const lng = pos.coords.longitude;
@@ -131,11 +139,20 @@ function startGPSFollow() {
         if (gpsFollowing) map.setView([lat, lng], map.getZoom());
     }, err => console.error(err), { enableHighAccuracy: true, maximumAge: 1000 });
 }
-function stopGPSFollow() { gpsFollowing = false; if (watchID) navigator.geolocation.clearWatch(watchID); }
-function toggleGPSFollow() { gpsFollowing = !gpsFollowing; if (gpsFollowing) startGPSFollow(); else stopGPSFollow(); }
+
+function stopGPSFollow() {
+    gpsFollowing = false;
+    document.getElementById("btn-gps").classList.remove("active");
+    if (watchID) navigator.geolocation.clearWatch(watchID);
+}
+
+function toggleGPSFollow() {
+    gpsFollowing ? stopGPSFollow() : startGPSFollow();
+}
+
 startGPSFollow();
 
-// Export to KML
+// Export KML
 function exportKML() {
     const kmlHeader = `<?xml version="1.0" encoding="UTF-8"?><kml xmlns="http://www.opengis.net/kml/2.2"><Document>`;
     const kmlFooter = "</Document></kml>";
@@ -151,7 +168,7 @@ function exportKML() {
     a.remove();
 }
 
-// Clear Map
+// Clear map
 function clearMap() {
     allMarkers.forEach(m => map.removeLayer(m));
     allMarkers.length = 0;
