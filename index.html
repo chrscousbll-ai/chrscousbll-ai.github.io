@@ -1,226 +1,176 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>Vegetation Mapping</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
-  <style>
-    body, html { margin: 0; height: 100%; }
-    #map { height: 100%; width: 100%; }
-    #controls {
-      position: absolute;
-      top: 10px;
-      left: 10px;
-      z-index: 1000;
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-    #controls button {
-      padding: 12px 18px;
-      font-size: 16px;
-      border: 2px solid #444;
-      border-radius: 8px;
-      background: white;
-      cursor: pointer;
-      min-width: 140px;
-    }
-    #controls button.active {
-      outline: 3px solid black;
-      background: #e0e0e0;
-    }
-    #info {
-      position: absolute;
-      bottom: 10px;
-      left: 10px;
-      background: rgba(255, 255, 255, 0.9);
-      padding: 6px 10px;
-      font-size: 14px;
-      border-radius: 6px;
-    }
-    .dead-tree-icon {
-      font-size: 24px;
-      text-align: center;
-      line-height: 32px;
-    }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vegetation Mapper</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+<style>
+html, body, #map { height: 100%; margin:0; padding:0; }
+#map { width: 100%; }
+
+#controls {
+  position: absolute; top: 10px; left: 10px; z-index: 1000;
+  display: flex; flex-direction: column; gap: 8px;
+}
+
+#controls button {
+  padding: 12px 18px; font-size: 16px;
+  border: 2px solid #444; border-radius: 8px; background: white; cursor: pointer;
+  min-width: 140px;
+}
+
+#controls button.active {
+  outline: 3px solid black; background: #e0e0e0;
+}
+
+#info {
+  position: absolute; bottom: 10px; left: 10px;
+  background: rgba(255,255,255,0.9); padding: 6px 10px; font-size: 14px;
+  border-radius: 6px;
+}
+
+.dead-tree-icon { font-size: 24px; text-align:center; line-height:32px; }
+</style>
 </head>
 <body>
-  <div id="map"></div>
-  <div id="controls">
-    <!-- Vegetation buttons -->
-    <button data-cat="light">Light</button>
-    <button data-cat="medium">Medium</button>
-    <button data-cat="heavy">Heavy</button>
-    <button data-cat="dead">Dead Tree</button>
 
-    <!-- Functional buttons -->
-    <button id="recBtn">Start Recording</button>
-    <button id="followBtn">Follow GPS</button>
-    <button id="clearLast">Clear Last</button>
-    <button id="clearAll">Clear All</button>
-  </div>
-  <div id="info">
-    <div>Distance: <span id="dist">0</span> m</div>
-    <div>Coords: <span id="coords">--</span></div>
-  </div>
+<div id="map"></div>
 
-  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-  <script>
-    const map = L.map('map');
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '&copy; OpenStreetMap'
-    }).addTo(map);
+<div id="controls">
+  <!-- Vegetation categories -->
+  <button data-cat="light">Light</button>
+  <button data-cat="medium">Medium</button>
+  <button data-cat="heavy">Heavy</button>
+  <button data-cat="dead">Dead Tree</button>
 
-    // Try to center map on current GPS location at load
-    if ("geolocation" in navigator) {
-      navigator.geolocation.getCurrentPosition(p => {
-        map.setView([p.coords.latitude, p.coords.longitude], 17);
-      });
+  <!-- Functional buttons -->
+  <button id="recBtn">Start Recording</button>
+  <button id="followBtn">Follow GPS</button>
+  <button id="clearLast">Clear Last</button>
+  <button id="clearAll">Clear All</button>
+
+  <button id="exportBtn">Export GeoJSON</button>
+</div>
+
+<div id="info">
+  <div>Distance: <span id="dist">0</span> m</div>
+  <div>Coords: <span id="coords">--</span></div>
+</div>
+
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<script>
+// Map
+const map = L.map('map');
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap' }).addTo(map);
+if ("geolocation" in navigator) navigator.geolocation.getCurrentPosition(p=>map.setView([p.coords.latitude, p.coords.longitude],17));
+
+// State
+let currentCategory = "light", recording=false, followGPS=false, watchId=null;
+let pathSegments=[], currentSegment=null, totalDistance=0;
+
+// Elements
+const recBtn=document.getElementById('recBtn');
+const followBtn=document.getElementById('followBtn');
+const distEl=document.getElementById('dist');
+const coordsEl=document.getElementById('coords');
+
+// Dead Tree icon
+const deadTreeIcon = L.divIcon({ html:"💀🌳", className:"dead-tree-icon", iconSize:[32,32] });
+
+// Category buttons
+document.querySelectorAll('[data-cat]').forEach(btn=>{
+  btn.onclick=()=>{
+    const cat = btn.dataset.cat;
+
+    if(cat==="dead"){
+      if("geolocation" in navigator){
+        navigator.geolocation.getCurrentPosition(p=>{
+          const latlng={lat:p.coords.latitude,lng:p.coords.longitude};
+          // Place marker
+          L.marker([latlng.lat,latlng.lng],{icon:deadTreeIcon}).addTo(map).bindPopup("Dead Tree");
+          // Save for export
+          pathSegments.push({category:"dead",latlngs:[latlng]});
+        });
+      } else alert("Geolocation not available.");
+
+      // Flash button
+      btn.classList.add("active");
+      setTimeout(()=>btn.classList.remove("active"),300);
+
+    } else {
+      currentCategory=cat;
+      document.querySelectorAll('[data-cat]').forEach(b=>b.classList.remove("active"));
+      btn.classList.add("active");
     }
+  };
+});
 
-    // Elements
-    const recBtn = document.getElementById('recBtn');
-    const followBtn = document.getElementById('followBtn');
-    const distEl = document.getElementById('dist');
-    const coordsEl = document.getElementById('coords');
+// Recording toggle
+recBtn.onclick=()=>{
+  recording=!recording;
+  if(recording){
+    recBtn.textContent="Stop Recording"; recBtn.classList.add("active");
+    currentSegment={category:currentCategory,latlngs:[]};
+    if("geolocation" in navigator) watchId=navigator.geolocation.watchPosition(onPos,console.error,{enableHighAccuracy:true});
+    else alert("Geolocation not available.");
+  } else {
+    recBtn.textContent="Start Recording"; recBtn.classList.remove("active");
+    if(watchId){navigator.geolocation.clearWatch(watchId); watchId=null;}
+    if(currentSegment && currentSegment.latlngs.length){pathSegments.push(currentSegment); currentSegment=null; renderSegments();}
+  }
+};
 
-    // State
-    let currentCategory = "light";
-    let recording = false;
-    let followGPS = false;
-    let watchId = null;
-    let currentSegment = null;
-    let pathSegments = [];
-    let totalDistance = 0;
+// Follow GPS toggle
+followBtn.onclick=()=>{ followGPS=!followGPS; followBtn.classList.toggle("active",followGPS); };
 
-    // Custom Dead Tree icon
-    const deadTreeIcon = L.divIcon({
-      html: "💀🌳",
-      className: "dead-tree-icon",
-      iconSize: [32, 32]
-    });
+// GPS update handler
+function onPos(p){
+  const latlng={lat:p.coords.latitude,lng:p.coords.longitude};
+  coordsEl.textContent=`${latlng.lat.toFixed(6)}, ${latlng.lng.toFixed(6)}`;
 
-    // Category button behavior
-    document.querySelectorAll('[data-cat]').forEach(btn => {
-      btn.onclick = () => {
-        currentCategory = btn.dataset.cat;
-        document.querySelectorAll('[data-cat]').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-      };
-    });
+  if(currentCategory==="dead") return; // Dead Tree handled by button
 
-    // Recording toggle
-    recBtn.onclick = () => {
-      recording = !recording;
-      if (recording) {
-        recBtn.textContent = "Stop Recording";
-        recBtn.classList.add("active");
-        currentSegment = { category: currentCategory, latlngs: [] };
-        if ("geolocation" in navigator) {
-          watchId = navigator.geolocation.watchPosition(onPos, console.error, { enableHighAccuracy: true });
-        } else {
-          alert("Geolocation not available.");
-        }
-      } else {
-        recBtn.textContent = "Start Recording";
-        recBtn.classList.remove("active");
-        if (watchId) {
-          navigator.geolocation.clearWatch(watchId);
-          watchId = null;
-        }
-        if (currentSegment && currentSegment.latlngs.length) {
-          pathSegments.push(currentSegment);
-          currentSegment = null;
-          renderSegments();
-        }
-      }
-    };
+  if(recording){
+    const arr=currentSegment.latlngs;
+    if(arr.length>0) totalDistance+=haversine(arr[arr.length-1],latlng);
+    arr.push(latlng);
+    renderSegments();
+  }
 
-    // Follow GPS toggle
-    followBtn.onclick = () => {
-      followGPS = !followGPS;
-      followBtn.classList.toggle("active", followGPS);
-    };
+  if(followGPS) map.setView([latlng.lat,latlng.lng],map.getZoom(),{animate:true});
+}
 
-    // Handle GPS position updates
-    function onPos(p) {
-      const latlng = { lat: p.coords.latitude, lng: p.coords.longitude };
-      coordsEl.textContent = `${latlng.lat.toFixed(6)}, ${latlng.lng.toFixed(6)}`;
+// Draw paths
+function renderSegments(){
+  map.eachLayer(l=>{
+    if(l instanceof L.Polyline && !(l instanceof L.TileLayer)) map.removeLayer(l);
+  });
+  pathSegments.forEach(seg=>{
+    if(seg.category!=="dead")
+      L.polyline(seg.latlngs,{color:catColor(seg.category),weight:5}).addTo(map);
+  });
+  if(currentSegment && currentSegment.latlngs.length) L.polyline(currentSegment.latlngs,{color:catColor(currentSegment.category),weight:5}).addTo(map);
+  distEl.textContent=totalDistance.toFixed(1);
+}
 
-      // Dead Tree = drop marker only
-      if (currentCategory === "dead") {
-        L.marker([latlng.lat, latlng.lng], { icon: deadTreeIcon })
-          .addTo(map)
-          .bindPopup("Dead Tree");
-        return;
-      }
+function catColor(cat){ switch(cat){case "light":return"green"; case "medium":return"orange"; case "heavy":return"red"; default:return"blue";} }
+function haversine(a,b){ const R=6371000,r=Math.PI/180; const dLat=(b.lat-a.lat)*r,dLng=(b.lng-a.lng)*r,lat1=a.lat*r,lat2=b.lat*r; const h=Math.sin(dLat/2)**2+Math.cos(lat1)*Math.cos(lat2)*Math.sin(dLng/2)**2; return 2*R*Math.asin(Math.sqrt(h)); }
 
-      // Normal path recording
-      if (recording) {
-        const arr = currentSegment.latlngs;
-        if (arr.length > 0) totalDistance += haversine(arr[arr.length - 1], latlng);
-        arr.push(latlng);
-        renderSegments();
-      }
+// Clear buttons
+document.getElementById("clearLast").onclick=()=>{pathSegments.pop(); renderSegments();};
+document.getElementById("clearAll").onclick=()=>{pathSegments=[]; totalDistance=0; renderSegments();};
 
-      if (followGPS) {
-        map.setView([latlng.lat, latlng.lng], map.getZoom(), { animate: true });
-      }
-    }
+// Export GeoJSON
+document.getElementById('exportBtn').onclick=()=>{
+  const features=pathSegments.map(seg=>{
+    if(seg.category==="dead") return {type:"Feature",properties:{category:"dead"},geometry:{type:"Point",coordinates:[seg.latlngs[0].lng,seg.latlngs[0].lat]}};
+    return {type:"Feature",properties:{category:seg.category},geometry:{type:"LineString",coordinates:seg.latlngs.map(pt=>[pt.lng,pt.lat])}};
+  });
+  const blob=new Blob([JSON.stringify({type:"FeatureCollection",features})],{type:"application/json"});
+  const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download="vegmap.geojson"; a.click(); URL.revokeObjectURL(url);
+};
+</script>
 
-    // Draw recorded paths
-    function renderSegments() {
-      map.eachLayer(layer => {
-        if (layer instanceof L.Polyline && !(layer instanceof L.TileLayer)) {
-          map.removeLayer(layer);
-        }
-      });
-
-      pathSegments.forEach(seg => {
-        L.polyline(seg.latlngs, { color: catColor(seg.category), weight: 5 }).addTo(map);
-      });
-
-      if (currentSegment && currentSegment.latlngs.length) {
-        L.polyline(currentSegment.latlngs, { color: catColor(currentSegment.category), weight: 5 }).addTo(map);
-      }
-
-      distEl.textContent = totalDistance.toFixed(1);
-    }
-
-    function catColor(cat) {
-      switch (cat) {
-        case "light": return "green";
-        case "medium": return "orange";
-        case "heavy": return "red";
-        default: return "blue";
-      }
-    }
-
-    // Distance calc
-    function haversine(a, b) {
-      const R = 6371000;
-      const toRad = deg => deg * Math.PI / 180;
-      const dLat = toRad(b.lat - a.lat);
-      const dLng = toRad(b.lng - a.lng);
-      const lat1 = toRad(a.lat);
-      const lat2 = toRad(b.lat);
-      const h = Math.sin(dLat / 2) ** 2 +
-                Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
-      return 2 * R * Math.asin(Math.sqrt(h));
-    }
-
-    // Clear buttons
-    document.getElementById("clearLast").onclick = () => {
-      pathSegments.pop();
-      renderSegments();
-    };
-    document.getElementById("clearAll").onclick = () => {
-      pathSegments = [];
-      totalDistance = 0;
-      renderSegments();
-    };
-  </script>
 </body>
 </html>
