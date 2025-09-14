@@ -1,229 +1,123 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Vegetation Mapper</title>
-<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
-<style>
-html, body, #map { height: 100%; margin:0; padding:0; }
-#map { width: 100%; }
-
-#controls {
-  position: absolute; top: 10px; left: 10px; z-index: 1000;
-  display: flex; flex-direction: column; gap: 8px;
-}
-
-#controls button {
-  padding: 12px 18px; font-size: 16px;
-  border: 2px solid #444; border-radius: 8px; background: white; cursor: pointer;
-  min-width: 140px;
-}
-
-#controls button.active {
-  outline: 3px solid black; background: #e0e0e0;
-}
-
-#info {
-  position: absolute; bottom: 10px; left: 10px;
-  background: rgba(255,255,255,0.9); padding: 6px 10px; font-size: 14px;
-  border-radius: 6px;
-}
-
-.dead-tree-icon { font-size: 24px; text-align:center; line-height:32px; }
-.delete-btn { font-size:14px; padding:4px 6px; cursor:pointer; }
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vegetation Mapping Tool</title>
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <style>
+        body { font-family: Arial, sans-serif; margin: 10px; }
+        #map { height: 600px; width: 100%; margin-top: 10px; }
+        button { margin: 2px; padding: 5px 10px; cursor: pointer; }
+        .selected { border: 2px solid black; background-color: #ddd; }
+        #distances { margin-top: 10px; }
+        #distances ul { list-style: none; padding-left: 0; }
+        #distances li { margin-bottom: 5px; }
+    </style>
 </head>
 <body>
+    <h1>Vegetation Mapping Tool</h1>
 
-<div id="map"></div>
+    <div>
+        <button id="btn-no" onclick="selectVegetation('no', this)">No Vegetation</button>
+        <button id="btn-light" onclick="selectVegetation('light', this)">Light</button>
+        <button id="btn-moderate" onclick="selectVegetation('moderate', this)">Moderate</button>
+        <button id="btn-heavy" onclick="selectVegetation('heavy', this)">Heavy</button>
+    </div>
 
-<div id="controls">
-  <!-- Vegetation categories -->
-  <button data-cat="light">Light</button>
-  <button data-cat="medium">Medium</button>
-  <button data-cat="heavy">Heavy</button>
-  <button data-cat="none">No Vegetation</button>
-  <button data-cat="dead">Dead Tree</button>
+    <div id="map"></div>
 
-  <!-- Functional buttons -->
-  <button id="recBtn">Start Recording</button>
-  <button id="followBtn">Follow GPS</button>
-  <button id="clearLast">Clear Last</button>
-  <button id="clearAll">Clear All</button>
-  <button id="exportBtn">Export KML</button>
-</div>
+    <div id="distances">
+        <h3>Distance Traveled (meters)</h3>
+        <ul>
+            <li>No Vegetation: <span id="dist-no">0</span></li>
+            <li>Light: <span id="dist-light">0</span></li>
+            <li>Moderate: <span id="dist-moderate">0</span></li>
+            <li>Heavy: <span id="dist-heavy">0</span></li>
+        </ul>
+    </div>
 
-<div id="info">
-  <div>Distance: <span id="dist">0</span> m</div>
-  <div>Coords: <span id="coords">--</span></div>
-</div>
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <script>
+        // Initialize map
+        const map = L.map('map').setView([45.0, -68.7], 10);
 
-<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-<script>
-// Map
-const map = L.map('map');
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap' }).addTo(map);
-if ("geolocation" in navigator) navigator.geolocation.getCurrentPosition(p=>map.setView([p.coords.latitude, p.coords.longitude],17));
+        // OpenStreetMap tiles
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '© OpenStreetMap'
+        }).addTo(map);
 
-// State
-let currentCategory = "light", recording=false, followGPS=false, watchId=null;
-let pathSegments=[], currentSegment=null, totalDistance=0;
+        // Vegetation settings
+        let currentVegetation = 'no';
+        let lastSelectedButton = document.getElementById("btn-no");
 
-// Elements
-const recBtn=document.getElementById('recBtn');
-const followBtn=document.getElementById('followBtn');
-const distEl=document.getElementById('dist');
-const coordsEl=document.getElementById('coords');
+        const vegetationColors = {
+            "no": "gray",
+            "light": "green",
+            "moderate": "orange",
+            "heavy": "red"
+        };
 
-// Dead Tree icon
-const deadTreeIcon = L.divIcon({ html:"💀🌳", className:"dead-tree-icon", iconSize:[32,32] });
+        // Track last point per vegetation type
+        const lastPoint = {
+            "no": null,
+            "light": null,
+            "moderate": null,
+            "heavy": null
+        };
 
-// Category buttons
-document.querySelectorAll('[data-cat]').forEach(btn=>{
-  btn.onclick=()=>{
-    const cat = btn.dataset.cat;
+        // Track total distance per type
+        const totalDistance = {
+            "no": 0,
+            "light": 0,
+            "moderate": 0,
+            "heavy": 0
+        };
 
-    if(cat==="dead"){
-      if("geolocation" in navigator){
-        navigator.geolocation.getCurrentPosition(p=>{
-          const latlng={lat:p.coords.latitude,lng:p.coords.longitude};
+        function selectVegetation(type, button) {
+            currentVegetation = type;
 
-          // Create marker
-          const marker = L.marker([latlng.lat,latlng.lng], {icon:deadTreeIcon}).addTo(map);
+            // Remove highlight from previous
+            if (lastSelectedButton) lastSelectedButton.classList.remove("selected");
 
-          // Save segment
-          const segment = {category:"dead", latlngs:[latlng], marker};
-          pathSegments.push(segment);
+            // Highlight current button
+            button.classList.add("selected");
+            lastSelectedButton = button;
 
-          // Add popup with Delete button
-          marker.bindPopup('<button class="delete-btn">Delete Dead Tree</button>').openPopup();
+            console.log("Selected vegetation:", type);
+        }
 
-          marker.on('popupopen', function() {
-            const btnDel = document.querySelector('.delete-btn');
-            btnDel.onclick = () => {
-              map.removeLayer(marker);
-              const index = pathSegments.indexOf(segment);
-              if(index > -1) pathSegments.splice(index,1);
-            };
-          });
+        function drawVegetation(lat, lng) {
+            const color = vegetationColors[currentVegetation] || "black";
+
+            // Draw the circle
+            L.circle([lat, lng], { radius: 5, color: color, fillColor: color, fillOpacity: 0.7 }).addTo(map);
+
+            // Calculate distance from last point of the same type
+            const prev = lastPoint[currentVegetation];
+            if (prev) {
+                const dist = map.distance([lat, lng], prev); // meters
+                totalDistance[currentVegetation] += dist;
+                document.getElementById("dist-" + currentVegetation).innerText = totalDistance[currentVegetation].toFixed(1);
+            }
+
+            lastPoint[currentVegetation] = [lat, lng];
+
+            // Switch back to "No Vegetation"
+            selectVegetation('no', document.getElementById("btn-no"));
+        }
+
+        // Map click handler
+        map.on('click', function(e) {
+            drawVegetation(e.latlng.lat, e.latlng.lng);
         });
-      } else alert("Geolocation not available.");
 
-      // Flash button briefly
-      btn.classList.add("active");
-      setTimeout(()=>btn.classList.remove("active"),300);
-
-    } else {
-      currentCategory=cat;
-      document.querySelectorAll('[data-cat]').forEach(b=>b.classList.remove("active"));
-      btn.classList.add('active');
-    }
-  };
-});
-
-// Recording toggle
-recBtn.onclick=()=>{
-  recording=!recording;
-  if(recording){
-    recBtn.textContent="Stop Recording"; recBtn.classList.add("active");
-    currentSegment={category:currentCategory,latlngs:[]};
-    if("geolocation" in navigator) watchId=navigator.geolocation.watchPosition(onPos,console.error,{enableHighAccuracy:true});
-    else alert("Geolocation not available.");
-  } else {
-    recBtn.textContent="Start Recording"; recBtn.classList.remove("active");
-    if(watchId){navigator.geolocation.clearWatch(watchId); watchId=null;}
-    if(currentSegment && currentSegment.latlngs.length){pathSegments.push(currentSegment); currentSegment=null; renderSegments();}
-  }
-};
-
-// Follow GPS toggle
-followBtn.onclick=()=>{ followGPS=!followGPS; followBtn.classList.toggle("active",followGPS); };
-
-// GPS update handler
-function onPos(p){
-  const latlng={lat:p.coords.latitude,lng:p.coords.longitude};
-  coordsEl.textContent=`${latlng.lat.toFixed(6)}, ${latlng.lng.toFixed(6)}`;
-
-  if(currentCategory==="dead") return; // Dead Tree handled by button
-
-  if(recording){
-    const arr=currentSegment.latlngs;
-    if(arr.length>0) totalDistance+=haversine(arr[arr.length-1],latlng);
-    arr.push(latlng);
-    renderSegments();
-  }
-
-  if(followGPS) map.setView([latlng.lat,latlng.lng],map.getZoom(),{animate:true});
-}
-
-// Draw paths
-function renderSegments(){
-  map.eachLayer(l=>{
-    if(l instanceof L.Polyline && !(l instanceof L.TileLayer)) map.removeLayer(l);
-  });
-  pathSegments.forEach(seg=>{
-    if(seg.category!=="dead")
-      L.polyline(seg.latlngs,{color:catColor(seg.category),weight:5}).addTo(map);
-  });
-  if(currentSegment && currentSegment.latlngs.length) L.polyline(currentSegment.latlngs,{color:catColor(currentSegment.category),weight:5}).addTo(map);
-  distEl.textContent=totalDistance.toFixed(1);
-}
-
-function catColor(cat){ switch(cat){case "light":return"green"; case "medium":return"orange"; case "heavy":return"red"; case "none":return"gray"; default:return"blue";} }
-function haversine(a,b){ const R=6371000,r=Math.PI/180; const dLat=(b.lat-a.lat)*r,dLng=(b.lng-a.lng)*r,lat1=a.lat*r,lat2=b.lat*r; const h=Math.sin(dLat/2)**2+Math.cos(lat1)*Math.cos(lat2)*Math.sin(dLng/2)**2; return 2*R*Math.asin(Math.sqrt(h)); }
-
-// Clear buttons
-document.getElementById("clearLast").onclick=()=>{pathSegments.pop(); renderSegments();};
-document.getElementById("clearAll").onclick=()=>{pathSegments=[]; totalDistance=0; renderSegments();};
-
-// Export KML - dual file for Google My Maps
-document.getElementById('exportBtn').onclick = () => {
-
-  // Helper: LineString to KML
-  function lineToKML(seg) {
-    const coords = seg.latlngs.map(pt => `${pt.lng},${pt.lat},0`).join(' ');
-    return `<Placemark>
-      <name>${seg.category}</name>
-      <LineString><coordinates>${coords}</coordinates></LineString>
-    </Placemark>`;
-  }
-
-  // Helper: Point to KML
-  function pointToKML(seg) {
-    const pt = seg.latlngs[0];
-    return `<Placemark>
-      <name>${seg.category}</name>
-      <Point><coordinates>${pt.lng},${pt.lat},0</coordinates></Point>
-    </Placemark>`;
-  }
-
-  // Separate features
-  const linePlacemarks = pathSegments.filter(f => f.category !== "dead").map(lineToKML).join('\n');
-  const pointPlacemarks = pathSegments.filter(f => f.category === "dead").map(pointToKML).join('\n');
-
-  // KML wrappers
-  const linesKML = `<?xml version="1.0" encoding="UTF-8"?>
-<kml xmlns="http://www.opengis.net/kml/2.2"><Document>${linePlacemarks}</Document></kml>`;
-
-  const pointsKML = `<?xml version="1.0" encoding="UTF-8"?>
-<kml xmlns="http://www.opengis.net/kml/2.2"><Document>${pointPlacemarks}</Document></kml>`;
-
-  const download = (filename, content) => {
-    const blob = new Blob([content], { type: "application/vnd.google-earth.kml+xml" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = filename;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  // Download both KML files
-  download("veg_paths.kml", linesKML);
-  download("dead_trees.kml", pointsKML);
-};
-</script>
-
+        // Highlight default button
+        lastSelectedButton.classList.add("selected");
+    </script>
 </body>
 </html>
