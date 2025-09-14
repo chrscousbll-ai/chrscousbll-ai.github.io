@@ -10,8 +10,24 @@
     <style>
         body { font-family: Arial, sans-serif; margin: 10px; }
         #map { height: 600px; width: 100%; margin-top: 10px; }
-        button { margin: 2px; padding: 5px 10px; cursor: pointer; }
+
+        /* Button container */
+        #button-container {
+            display: flex;
+            flex-wrap: wrap;       /* wrap buttons if screen is small */
+            gap: 10px;             /* spacing between buttons */
+            margin-bottom: 10px;
+        }
+
+        #button-container button {
+            flex: 1 1 120px;       /* minimum width, grow if possible */
+            padding: 10px 15px;    /* bigger buttons for easier tapping */
+            font-size: 16px;
+            cursor: pointer;
+        }
+
         .selected { border: 2px solid black; background-color: #ddd; }
+
         #distances { margin-top: 10px; }
         #distances ul { list-style: none; padding-left: 0; }
         #distances li { margin-bottom: 5px; }
@@ -20,15 +36,18 @@
 <body>
     <h1>Vegetation Mapping Tool</h1>
 
-    <div>
+    <!-- Buttons -->
+    <div id="button-container">
         <button id="btn-no" onclick="selectVegetation('no', this)">No Vegetation</button>
         <button id="btn-light" onclick="selectVegetation('light', this)">Light</button>
         <button id="btn-moderate" onclick="selectVegetation('moderate', this)">Moderate</button>
         <button id="btn-heavy" onclick="selectVegetation('heavy', this)">Heavy</button>
     </div>
 
+    <!-- Map -->
     <div id="map"></div>
 
+    <!-- Distances -->
     <div id="distances">
         <h3>Distance Traveled (meters)</h3>
         <ul>
@@ -78,6 +97,7 @@
             "heavy": 0
         };
 
+        // Select vegetation type
         function selectVegetation(type, button) {
             currentVegetation = type;
 
@@ -89,10 +109,10 @@
             console.log("Selected vegetation:", type);
         }
 
+        // Draw a vegetation point
         function drawVegetation(lat, lng) {
             const color = vegetationColors[currentVegetation] || "black";
 
-            // Draw the circle
             L.circle([lat, lng], { radius: 5, color: color, fillColor: color, fillOpacity: 0.7 }).addTo(map);
 
             // Calculate distance from last point of the same type
@@ -105,7 +125,7 @@
 
             lastPoint[currentVegetation] = [lat, lng];
 
-            // Switch back to "No Vegetation"
+            // Reset to "No Vegetation"
             selectVegetation('no', document.getElementById("btn-no"));
         }
 
