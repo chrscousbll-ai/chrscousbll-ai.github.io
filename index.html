@@ -38,6 +38,7 @@ button {
     <button class="catBtn" data-cat="light" style="background:#7bed9f;">Light</button>
     <button class="catBtn" data-cat="medium" style="background:#f6e58d;">Medium</button>
     <button class="catBtn" data-cat="heavy" style="background:#ff6b6b;">Heavy</button>
+    <button class="catBtn" data-cat="dead" style="background:#a4b0be; color:white;">Dead Tree</button>
   </div>
 
   <!-- Functional buttons -->
@@ -68,14 +69,29 @@ button {
 const CATEGORIES = {
   light: "#7bed9f",
   medium: "#f6e58d",
-  heavy: "#ff6b6b"
+  heavy: "#ff6b6b",
+  dead: "#a4b0be"
 };
 
 let currentCategory = "light";
 
 // Map
-const map = L.map('map').setView([44.8, -68.7], 13);
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19, attribution:'© OpenStreetMap'}).addTo(map);
+const map = L.map('map');
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  maxZoom:19,
+  attribution:'© OpenStreetMap'
+}).addTo(map);
+
+// Try to set initial view to current location
+if ("geolocation" in navigator) {
+  navigator.geolocation.getCurrentPosition(pos => {
+    map.setView([pos.coords.latitude, pos.coords.longitude], 16);
+  }, () => {
+    map.setView([44.8, -68.7], 13); // fallback if GPS fails
+  });
+} else {
+  map.setView([44.8, -68.7], 13); // fallback if no GPS
+}
 
 let recording=false, watchId=null, pathSegments=[], currentSegment=null;
 let totalDistance=0;
