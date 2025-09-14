@@ -33,6 +33,14 @@ button {
 <div id="map"></div>
 
 <div id="controls">
+  <!-- Category buttons -->
+  <div>
+    <button class="catBtn" data-cat="light" style="background:#7bed9f;">Light</button>
+    <button class="catBtn" data-cat="medium" style="background:#f6e58d;">Medium</button>
+    <button class="catBtn" data-cat="heavy" style="background:#ff6b6b;">Heavy</button>
+  </div>
+
+  <!-- Functional buttons -->
   <div>
     <button id="startRec">Start Recording</button>
     <button id="stopRec" disabled>Stop</button>
@@ -46,8 +54,8 @@ button {
       <span id="importLabel">Import GeoJSON</span>
       <input type="file" id="fileInput" accept=".geojson,.json" />
     </label>
-    <button id="saveLocal">Save (localStorage)</button>
-    <button id="loadLocal">Load (localStorage)</button>
+    <button id="saveLocal">Save</button>
+    <button id="loadLocal">Load</button>
   </div>
   <div id="status">
     <div><strong>Live:</strong> <span id="coords">—</span></div>
@@ -56,6 +64,15 @@ button {
 </div>
 
 <script>
+// Categories
+const CATEGORIES = {
+  light: "#7bed9f",
+  medium: "#f6e58d",
+  heavy: "#ff6b6b"
+};
+
+let currentCategory = "light";
+
 // Map
 const map = L.map('map').setView([44.8, -68.7], 13);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19, attribution:'© OpenStreetMap'}).addTo(map);
@@ -73,8 +90,11 @@ const segmentLayers=L.layerGroup().addTo(map);
 
 function renderSegments(){
   segmentLayers.clearLayers();
-  pathSegments.forEach(seg=>L.polyline(seg.latlngs,{color:'#000',weight:5}).addTo(segmentLayers));
-  if(currentSegment) L.polyline(currentSegment.latlngs,{color:'#000',weight:5,dashArray:'6 4'}).addTo(segmentLayers);
+  pathSegments.forEach(seg=>
+    L.polyline(seg.latlngs,{color:CATEGORIES[seg.category],weight:5}).addTo(segmentLayers)
+  );
+  if(currentSegment)
+    L.polyline(currentSegment.latlngs,{color:CATEGORIES[currentSegment.category],weight:5,dashArray:'6 4'}).addTo(segmentLayers);
   updateStatus();
 }
 
@@ -87,7 +107,7 @@ const totalDistEl=document.getElementById('totalDist');
 startRecBtn.onclick=()=>{
   if(recording) return;
   recording=true; startRecBtn.disabled=true; stopRecBtn.disabled=false;
-  currentSegment={latlngs:[]};
+  currentSegment={category:currentCategory,latlngs:[]};
   if('geolocation' in navigator) watchId=navigator.geolocation.watchPosition(onPos,console.error,{enableHighAccuracy:true});
   else alert('Geolocation not available.');
 };
@@ -115,7 +135,7 @@ document.getElementById('clearLast').onclick=()=>{pathSegments.pop(); renderSegm
 document.getElementById('clearAll').onclick=()=>{pathSegments=[]; renderSegments(); totalDistance=0;};
 
 document.getElementById('exportBtn').onclick=()=>{
-  const data={type:"FeatureCollection",features:pathSegments.map(seg=>({type:"Feature",geometry:{type:"LineString",coordinates:seg.latlngs.map(pt=>[pt.lng,pt.lat])}}))};
+  const data={type:"FeatureCollection",features:pathSegments.map(seg=>({type:"Feature",properties:{category:seg.category},geometry:{type:"LineString",coordinates:seg.latlngs.map(pt=>[pt.lng,pt.lat])}}))};
   const blob=new Blob([JSON.stringify(data)],{type:"application/json"});
   const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download="vegmap.geojson"; a.click(); URL.revokeObjectURL(url);
 };
@@ -127,7 +147,7 @@ document.getElementById('fileInput').onchange=e=>{
     geo.features.forEach(f=>{
       if(f.geometry.type==="LineString"){
         const coords=f.geometry.coordinates.map(c=>({lat:c[1],lng:c[0]}));
-        pathSegments.push({latlngs:coords});
+        pathSegments.push({category:f.properties.category||"light",latlngs:coords});
       }
     });
     renderSegments();
@@ -135,7 +155,16 @@ document.getElementById('fileInput').onchange=e=>{
 };
 
 document.getElementById('saveLocal').onclick=()=>{localStorage.setItem('vegmap',JSON.stringify(pathSegments));};
-document.getElementById('loadLocal').onclick=()=>{const data=localStorage.getItem('vegmap'); if(data){pathSegments=JSON.parse(data); renderSegments();}}
+document.getElementById('loadLocal').onclick=()=>{const data=localStorage.getItem('vegmap'); if(data){pathSegments=JSON.parse(data); renderSegments();}};
+
+// Category button logic
+document.querySelectorAll('.catBtn').forEach(btn=>{
+  btn.onclick=()=>{
+    currentCategory=btn.dataset.cat;
+    document.querySelectorAll('.catBtn').forEach(b=>b.style.outline="none");
+    btn.style.outline="3px solid black";
+  };
+});
 </script>
 </body>
 </html>
