@@ -17,13 +17,6 @@ html, body, #map { height: 100%; margin: 0; padding: 0; }
 #controls > div { display:flex; flex-wrap:wrap; gap:12px; align-items:center; }
 #controls label { font-size:16px; display:flex; align-items:center; gap:6px; }
 
-#legend {
-  position:absolute; right:8px; top:8px; z-index:1000;
-  background: rgba(255,255,255,0.9); padding:8px; border-radius:6px;
-  cursor: move; box-shadow: 0 2px 6px rgba(0,0,0,0.25); user-select:none;
-  max-width: 180px;
-}
-
 button {
   padding:12px 16px;
   font-size:16px;
@@ -33,11 +26,7 @@ button {
   white-space:nowrap;
 }
 
-.category-swatch { width:24px; height:24px; margin-right:8px; vertical-align:middle; border-radius:4px; border:1px solid rgba(0,0,0,0.1); }
-
 #status { font-size:14px; margin-top:8px; color:#333; }
-.small { font-size:12px; color:#666; }
-input[type=file]{display:none;}
 </style>
 </head>
 <body>
@@ -62,44 +51,32 @@ input[type=file]{display:none;}
   </div>
   <div id="status">
     <div><strong>Live:</strong> <span id="coords">—</span></div>
-    <div class="small">Total distance: <span id="totalDist">0.00</span> m</div>
+    <div>Total distance: <span id="totalDist">0.00</span> m</div>
   </div>
 </div>
 
-<div id="legend">
-  <div><strong>Legend (drag me)</strong></div>
-  <div id="legendContent" style="margin-top:6px"></div>
-</div>
-
 <script>
-// Categories only for legend colors, not buttons
-const CATEGORIES = [
-  { id:'grass', label:'Grass', color:'#6ab04c' },
-  { id:'shrub', label:'Shrub', color:'#f6b93b' },
-  { id:'forest', label:'Forest', color:'#2d98da' },
-  { id:'water', label:'Water', color:'#3c40c6' },
-  { id:'bare', label:'Bare', color:'#d1ccc0' }
-];
-
 // Map
 const map = L.map('map').setView([44.8, -68.7], 13);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19, attribution:'© OpenStreetMap'}).addTo(map);
 
 let recording=false, watchId=null, pathSegments=[], currentSegment=null;
-let distances={}; CATEGORIES.forEach(c=>distances[c.id]=0);
+let totalDistance=0;
 
-function haversine(a,b){const r=Math.PI/180,R=6371000,dLat=(b.lat-a.lat)*r,dLon=(b.lng-a.lng)*r,lat1=a.lat*r,lat2=b.lat*r,aa=Math.sin(dLat/2)**2+Math.sin(dLon/2)**2*Math.cos(lat1)*Math.cos(lat2);return 2*R*Math.atan2(Math.sqrt(aa),Math.sqrt(1-aa));}
+function haversine(a,b){
+  const r=Math.PI/180,R=6371000,dLat=(b.lat-a.lat)*r,dLon=(b.lng-a.lng)*r,lat1=a.lat*r,lat2=b.lat*r;
+  const aa=Math.sin(dLat/2)**2 + Math.sin(dLon/2)**2 * Math.cos(lat1) * Math.cos(lat2);
+  return 2*R*Math.atan2(Math.sqrt(aa),Math.sqrt(1-aa));
+}
 
 const segmentLayers=L.layerGroup().addTo(map);
 
 function renderSegments(){
   segmentLayers.clearLayers();
-  pathSegments.forEach(seg=>L.polyline(seg.latlngs,{color:seg.color||getColor(seg.category),weight:5}).addTo(segmentLayers));
-  if(currentSegment) L.polyline(currentSegment.latlngs,{color:getColor(currentSegment.category),weight:5,dashArray:'6 4'}).addTo(segmentLayers);
+  pathSegments.forEach(seg=>L.polyline(seg.latlngs,{color:'#000',weight:5}).addTo(segmentLayers));
+  if(currentSegment) L.polyline(currentSegment.latlngs,{color:'#000',weight:5,dashArray:'6 4'}).addTo(segmentLayers);
   updateStatus();
 }
-
-function getColor(catId){ const c=CATEGORIES.find(x=>x.id===catId); return c?c.color:'#000'; }
 
 const startRecBtn=document.getElementById('startRec');
 const stopRecBtn=document.getElementById('stopRec');
@@ -108,9 +85,9 @@ const coordsEl=document.getElementById('coords');
 const totalDistEl=document.getElementById('totalDist');
 
 startRecBtn.onclick=()=>{
-  if(recording)return;
+  if(recording) return;
   recording=true; startRecBtn.disabled=true; stopRecBtn.disabled=false;
-  currentSegment={category:'grass',latlngs:[]};
+  currentSegment={latlngs:[]};
   if('geolocation' in navigator) watchId=navigator.geolocation.watchPosition(onPos,console.error,{enableHighAccuracy:true});
   else alert('Geolocation not available.');
 };
@@ -126,47 +103,39 @@ function onPos(p){
   coordsEl.textContent=`${latlng.lat.toFixed(6)}, ${latlng.lng.toFixed(6)}`;
   if(recording){
     const arr=currentSegment.latlngs;
-    if(arr.length>0) distances[currentSegment.category]+=haversine(arr[arr.length-1],latlng);
+    if(arr.length>0) totalDistance+=haversine(arr[arr.length-1],latlng);
     arr.push(latlng); renderSegments();
   }
   if(followToggle.checked) map.setView([latlng.lat,latlng.lng],map.getZoom(),{animate:true});
 }
 
-function updateStatus(){
-  totalDistEl.textContent=Object.values(distances).reduce((a,b)=>a+b,0).toFixed(1);
-}
+function updateStatus(){ totalDistEl.textContent=totalDistance.toFixed(1); }
 
-// Clear buttons
 document.getElementById('clearLast').onclick=()=>{pathSegments.pop(); renderSegments();};
-document.getElementById('clearAll').onclick=()=>{pathSegments=[]; renderSegments();};
+document.getElementById('clearAll').onclick=()=>{pathSegments=[]; renderSegments(); totalDistance=0;};
 
-// Export/Import
 document.getElementById('exportBtn').onclick=()=>{
-  const data={type:"FeatureCollection",features:pathSegments.map(seg=>({type:"Feature",properties:{category:seg.category},geometry:{type:"LineString",coordinates:seg.latlngs.map(pt=>[pt.lng,pt.lat])}}))};
+  const data={type:"FeatureCollection",features:pathSegments.map(seg=>({type:"Feature",geometry:{type:"LineString",coordinates:seg.latlngs.map(pt=>[pt.lng,pt.lat])}}))};
   const blob=new Blob([JSON.stringify(data)],{type:"application/json"});
   const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download="vegmap.geojson"; a.click(); URL.revokeObjectURL(url);
 };
+
 document.getElementById('fileInput').onchange=e=>{
-  const file=e.target.files[0]; if(!file)return;
+  const file=e.target.files[0]; if(!file) return;
   const reader=new FileReader(); reader.onload=ev=>{
     const geo=JSON.parse(ev.target.result);
-    geo.features.forEach(f=>{if(f.geometry.type==="LineString"){const coords=f.geometry.coordinates.map(c=>({lat:c[1],lng:c[0]}));pathSegments.push({category:f.properties.category||'unknown',latlngs:coords});}});
+    geo.features.forEach(f=>{
+      if(f.geometry.type==="LineString"){
+        const coords=f.geometry.coordinates.map(c=>({lat:c[1],lng:c[0]}));
+        pathSegments.push({latlngs:coords});
+      }
+    });
     renderSegments();
   }; reader.readAsText(file);
 };
 
-// Local storage
 document.getElementById('saveLocal').onclick=()=>{localStorage.setItem('vegmap',JSON.stringify(pathSegments));};
-document.getElementById('loadLocal').onclick=()=>{const data=localStorage.getItem('vegmap'); if(data){pathSegments=JSON.parse(data); renderSegments();}};
-
-// Legend only shows swatches
-const legendContent=document.getElementById('legendContent');
-CATEGORIES.forEach(cat=>{
-  const row=document.createElement('div');
-  row.style.marginTop='6px';
-  row.innerHTML=`<span class="category-swatch" style="background:${cat.color}"></span> <strong>${cat.label}</strong>`;
-  legendContent.appendChild(row);
-});
+document.getElementById('loadLocal').onclick=()=>{const data=localStorage.getItem('vegmap'); if(data){pathSegments=JSON.parse(data); renderSegments();}}
 </script>
 </body>
 </html>
