@@ -42,6 +42,7 @@ html, body, #map { height: 100%; margin:0; padding:0; }
   <button data-cat="light">Light</button>
   <button data-cat="medium">Medium</button>
   <button data-cat="heavy">Heavy</button>
+  <button data-cat="none">No Vegetation</button>
   <button data-cat="dead">Dead Tree</button>
 
   <!-- Functional buttons -->
@@ -154,7 +155,7 @@ function renderSegments(){
   distEl.textContent=totalDistance.toFixed(1);
 }
 
-function catColor(cat){ switch(cat){case "light":return"green"; case "medium":return"orange"; case "heavy":return"red"; default:return"blue";} }
+function catColor(cat){ switch(cat){case "light":return"green"; case "medium":return"orange"; case "heavy":return"red"; case "none":return"gray"; default:return"blue";} }
 function haversine(a,b){ const R=6371000,r=Math.PI/180; const dLat=(b.lat-a.lat)*r,dLng=(b.lng-a.lng)*r,lat1=a.lat*r,lat2=b.lat*r; const h=Math.sin(dLat/2)**2+Math.cos(lat1)*Math.cos(lat2)*Math.sin(dLng/2)**2; return 2*R*Math.asin(Math.sqrt(h)); }
 
 // Clear buttons
