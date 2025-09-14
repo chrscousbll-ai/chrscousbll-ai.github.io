@@ -81,10 +81,8 @@
         function selectVegetation(type, button) {
             currentVegetation = type;
 
-            // Remove highlight from previous
             if (lastSelectedButton) lastSelectedButton.classList.remove("selected");
 
-            // Highlight current button
             button.classList.add("selected");
             lastSelectedButton = button;
 
@@ -118,6 +116,38 @@
 
         // Highlight default button
         lastSelectedButton.classList.add("selected");
+
+        // --- GPS Follow ---
+        function startGPSFollow() {
+            if (!navigator.geolocation) {
+                alert("Geolocation is not supported by your browser");
+                return;
+            }
+
+            navigator.geolocation.watchPosition(
+                (position) => {
+                    const lat = position.coords.latitude;
+                    const lng = position.coords.longitude;
+
+                    // Move the map to follow your position
+                    map.setView([lat, lng], map.getZoom());
+
+                    // Show your location on the map
+                    if (!window.userMarker) {
+                        window.userMarker = L.circle([lat, lng], { radius: 5, color: "blue", fillColor: "blue", fillOpacity: 0.7 }).addTo(map);
+                    } else {
+                        window.userMarker.setLatLng([lat, lng]);
+                    }
+                },
+                (error) => {
+                    console.error("Geolocation error:", error);
+                },
+                { enableHighAccuracy: true, maximumAge: 1000 }
+            );
+        }
+
+        // Start GPS follow
+        startGPSFollow();
     </script>
 </body>
 </html>
