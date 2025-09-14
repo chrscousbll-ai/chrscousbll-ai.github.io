@@ -17,8 +17,8 @@
   }
   #controls > div {
     display: flex;
-    flex-wrap: wrap;        /* allow buttons to go to next line if needed */
-    gap: 12px;              /* consistent space between buttons */
+    flex-wrap: wrap;
+    gap: 12px;
     align-items: center;
   }
   #controls label {
@@ -36,16 +36,8 @@
     max-width: 180px;
   }
 
-  /* Bottom key */
-  #bottomKey {
-    position: absolute; bottom:8px; left:8px; right:8px; z-index:1000;
-    background: rgba(255,255,255,0.92); padding:8px; border-radius:6px;
-    display:flex; flex-wrap: wrap; gap:12px; align-items:center; overflow-x:auto; overflow-y:auto;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.2); font-family: system-ui;
-  }
-
   /* Bigger buttons */
-  .category-btn, button {
+  button {
     padding: 12px 16px;
     font-size: 16px;
     border-radius: 8px;
@@ -81,7 +73,7 @@
   </div>
   <div>
     <button id="exportBtn">Export GeoJSON</button>
-    <label class="category-btn">
+    <label>
       <span id="importLabel">Import GeoJSON</span>
       <input type="file" id="fileInput" accept=".geojson,.json" />
     </label>
@@ -98,8 +90,6 @@
   <div><strong>Legend (drag me)</strong></div>
   <div id="legendContent" style="margin-top:6px"></div>
 </div>
-
-<div id="bottomKey"></div>
 
 <script>
 // === Categories ===
@@ -139,27 +129,14 @@ function haversine(a, b) {
 }
 function totalDistance() { return Object.values(distances).reduce((a,b)=>a+b,0); }
 
-// Legend and bottom key
+// Legend display (non-button)
 const legendContent = document.getElementById('legendContent');
-const bottomKey = document.getElementById('bottomKey');
 CATEGORIES.forEach(cat => {
   const row = document.createElement('div');
   row.style.marginTop = '6px';
   row.innerHTML = `<span class="category-swatch" style="background:${cat.color}"></span> <strong>${cat.label}</strong>`;
   legendContent.appendChild(row);
-
-  const btn = document.createElement('button');
-  btn.className = 'category-btn';
-  btn.id = 'cat_' + cat.id;
-  btn.innerHTML = `<span class="category-swatch" style="background:${cat.color}"></span>${cat.label}`;
-  btn.onclick = () => {
-    currentCategory = cat.id;
-    document.querySelectorAll('.category-btn').forEach(b => b.style.outline = '');
-    btn.style.outline = '3px solid rgba(0,0,0,0.12)';
-  };
-  bottomKey.appendChild(btn);
 });
-document.getElementById('cat_' + currentCategory).style.outline = '3px solid rgba(0,0,0,0.12)';
 
 // Layers
 const segmentLayers = L.layerGroup().addTo(map);
