@@ -177,14 +177,44 @@ function haversine(a,b){ const R=6371000,r=Math.PI/180; const dLat=(b.lat-a.lat)
 document.getElementById("clearLast").onclick=()=>{pathSegments.pop(); renderSegments();};
 document.getElementById("clearAll").onclick=()=>{pathSegments=[]; totalDistance=0; renderSegments();};
 
-// Export GeoJSON
-document.getElementById('exportBtn').onclick=()=>{
-  const features=pathSegments.map(seg=>{
-    if(seg.category==="dead") return {type:"Feature",properties:{category:"dead"},geometry:{type:"Point",coordinates:[seg.latlngs[0].lng,seg.latlngs[0].lat]}};
-    return {type:"Feature",properties:{category:seg.category},geometry:{type:"LineString",coordinates:seg.latlngs.map(pt=>[pt.lng,pt.lat])}};
-  });
-  const blob=new Blob([JSON.stringify({type:"FeatureCollection",features})],{type:"application/json"});
-  const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download="vegmap.geojson"; a.click(); URL.revokeObjectURL(url);
+// Export GeoJSON - dual file
+document.getElementById('exportBtn').onclick = () => {
+  // Lines
+  const lineFeatures = pathSegments
+    .filter(f => f.category !== "dead")
+    .map(seg => ({
+      type: "Feature",
+      properties: { category: seg.category },
+      geometry: { type: "LineString", coordinates: seg.latlngs.map(pt => [pt.lng, pt.lat]) }
+    }));
+
+  // Points
+  const pointFeatures = pathSegments
+    .filter(f => f.category === "dead")
+    .map(seg => ({
+      type: "Feature",
+      properties: { category: "dead" },
+      geometry: { type: "Point", coordinates: [seg.latlngs[0].lng, seg.latlngs[0].lat] }
+    }));
+
+  const linesGeoJSON = { type: "FeatureCollection", features: lineFeatures };
+  const pointsGeoJSON = { type: "FeatureCollection", features: pointFeatures };
+
+  const linesStr = JSON.stringify(linesGeoJSON, null, 2);
+  const pointsStr = JSON.stringify(pointsGeoJSON, null, 2);
+
+  const download = (filename, content) => {
+    const blob = new Blob([content], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  download("veg_paths.geojson", linesStr);
+  download("dead_trees.geojson", pointsStr);
 };
 </script>
 
