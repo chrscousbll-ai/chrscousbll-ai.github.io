@@ -28,6 +28,8 @@ body { font-family: Arial, sans-serif; margin: 10px; }
     <button id="btn-moderate">Moderate</button>
     <button id="btn-heavy">Heavy</button>
     <button id="btn-dead">Dead Tree</button>
+    <button id="btn-start">Start Recording</button>
+    <button id="btn-stop">Stop Recording</button>
     <button id="btn-gps">GPS Follow</button>
     <button id="btn-export">Export KML</button>
     <button id="btn-clear">Clear Map</button>
@@ -58,6 +60,7 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
 const vegetationColors = { "no":"gray", "light":"green", "moderate":"orange", "heavy":"red" };
 let currentVegetation = null;
 let lastSelectedButton = null;
+let recording = false;
 
 // Tracking data
 let userMarker = null;
@@ -91,6 +94,10 @@ document.getElementById("btn-light").onclick = () => selectVegetation('light', d
 document.getElementById("btn-moderate").onclick = () => selectVegetation('moderate', document.getElementById("btn-moderate"));
 document.getElementById("btn-heavy").onclick = () => selectVegetation('heavy', document.getElementById("btn-heavy"));
 
+// --- Start / Stop Recording ---
+document.getElementById("btn-start").onclick = () => { recording = true; alert("Recording started"); };
+document.getElementById("btn-stop").onclick = () => { recording = false; alert("Recording stopped"); };
+
 // --- GPS Follow ---
 function startGPSFollow() {
     gpsFollowing = true;
@@ -101,6 +108,15 @@ function startGPSFollow() {
 function stopGPSFollow() { gpsFollowing=false; document.getElementById("btn-gps").classList.remove("active"); if (watchID) navigator.geolocation.clearWatch(watchID); }
 document.getElementById("btn-gps").onclick = () => gpsFollowing ? stopGPSFollow() : startGPSFollow();
 
+// --- Dead Tree button ---
+document.getElementById("btn-dead").onclick = () => {
+    if (!userMarker) { alert("GPS not ready"); return; }
+    const latlng = userMarker.getLatLng();
+    const marker = L.marker([latlng.lat, latlng.lng], { icon: deadTreeIcon }).addTo(map);
+    deadTreeMarkers.push(marker);
+};
+
+// --- Update GPS ---
 function updateGPS(position) {
     const lat = position.coords.latitude;
     const lng = position.coords.longitude;
@@ -113,8 +129,8 @@ function updateGPS(position) {
 
     if (gpsFollowing) map.setView([lat,lng], map.getZoom());
 
-    // Update current vegetation path if any
-    if (currentVegetation) {
+    // Update vegetation path if recording and vegetation selected
+    if (recording && currentVegetation) {
         const path = vegetationPaths[currentVegetation];
         const latlngs = vegetationLatLngs[currentVegetation];
         if (latlngs.length > 0) {
@@ -128,21 +144,13 @@ function updateGPS(position) {
     }
 }
 
-// --- Dead Tree button ---
-document.getElementById("btn-dead").onclick = () => {
-    if (!userMarker) { alert("GPS not ready"); return; }
-    const latlng = userMarker.getLatLng();
-    const marker = L.marker([latlng.lat, latlng.lng], { icon: deadTreeIcon }).addTo(map);
-    deadTreeMarkers.push(marker);
-};
-
 // --- Export KML ---
 document.getElementById("btn-export").onclick = () => {
     const kmlHeader = `<?xml version="1.0" encoding="UTF-8"?><kml xmlns="http://www.opengis.net/kml/2.2"><Document>`;
     const kmlFooter = "</Document></kml>";
     let kmlPlacemarks = "";
 
-    // Paths
+    // Vegetation paths
     for (let type in vegetationLatLngs) {
         const coords = vegetationLatLngs[type].map(p => `${p[1]},${p[0]},0`).join(" ");
         if (coords.length>0) {
@@ -150,7 +158,7 @@ document.getElementById("btn-export").onclick = () => {
         }
     }
 
-    // Dead trees
+    // Dead tree markers
     for (const marker of deadTreeMarkers) {
         const pos = marker.getLatLng();
         kmlPlacemarks += `<Placemark><name>dead</name><Point><coordinates>${pos.lng},${pos.lat},0</coordinates></Point></Placemark>`;
@@ -172,6 +180,7 @@ document.getElementById("btn-clear").onclick = () => {
     deadTreeMarkers.length = 0;
 };
 
+// Start GPS follow on load
 startGPSFollow();
 </script>
 </body>
