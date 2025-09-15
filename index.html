@@ -64,8 +64,10 @@ let recording = false;
 
 // Tracking data
 let userMarker = null;
+let latestGPS = null;
 let watchID = null;
 let gpsFollowing = true;
+
 const vegetationPaths = { "no": null, "light": null, "moderate": null, "heavy": null };
 const vegetationLatLngs = { "no": [], "light": [], "moderate": [], "heavy": [] };
 const totalDistance = { "no": 0, "light": 0, "moderate": 0, "heavy": 0 };
@@ -83,7 +85,6 @@ function selectVegetation(type, button) {
     button.classList.add("selected");
     lastSelectedButton = button;
 
-    // Start path if it doesn't exist
     if (!vegetationPaths[type]) {
         vegetationPaths[type] = L.polyline([], { color: vegetationColors[type], weight: 5 }).addTo(map);
     }
@@ -110,9 +111,9 @@ document.getElementById("btn-gps").onclick = () => gpsFollowing ? stopGPSFollow(
 
 // --- Dead Tree button ---
 document.getElementById("btn-dead").onclick = () => {
-    if (!userMarker) { alert("GPS not ready"); return; }
-    const latlng = userMarker.getLatLng();
-    const marker = L.marker([latlng.lat, latlng.lng], { icon: deadTreeIcon }).addTo(map);
+    if (!latestGPS) { alert("GPS not ready yet"); return; }
+    const [lat, lng] = latestGPS;
+    const marker = L.marker([lat, lng], { icon: deadTreeIcon }).addTo(map);
     deadTreeMarkers.push(marker);
 };
 
@@ -120,6 +121,7 @@ document.getElementById("btn-dead").onclick = () => {
 function updateGPS(position) {
     const lat = position.coords.latitude;
     const lng = position.coords.longitude;
+    latestGPS = [lat, lng];
 
     if (!userMarker) {
         userMarker = L.circle([lat,lng], { radius:5, color:"blue", fillColor:"blue", fillOpacity:0.7 }).addTo(map);
@@ -129,7 +131,6 @@ function updateGPS(position) {
 
     if (gpsFollowing) map.setView([lat,lng], map.getZoom());
 
-    // Update vegetation path if recording and vegetation selected
     if (recording && currentVegetation) {
         const path = vegetationPaths[currentVegetation];
         const latlngs = vegetationLatLngs[currentVegetation];
