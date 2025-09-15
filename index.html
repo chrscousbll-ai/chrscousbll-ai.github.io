@@ -71,11 +71,6 @@ let gpsFollowing = true;
 const vegetationPaths = { "no": null, "light": null, "moderate": null, "heavy": null };
 const vegetationLatLngs = { "no": [], "light": [], "moderate": [], "heavy": [] };
 const totalDistance = { "no": 0, "light": 0, "moderate": 0, "heavy": 0 };
-const deadTreeIcon = L.icon({
-    iconUrl: 'https://cdn-icons-png.flaticon.com/512/149/149290.png',
-    iconSize: [32,32],
-    iconAnchor: [16,32]
-});
 const deadTreeMarkers = [];
 
 // --- Vegetation button handlers ---
@@ -109,7 +104,20 @@ function startGPSFollow() {
 function stopGPSFollow() { gpsFollowing=false; document.getElementById("btn-gps").classList.remove("active"); if (watchID) navigator.geolocation.clearWatch(watchID); }
 document.getElementById("btn-gps").onclick = () => gpsFollowing ? stopGPSFollow() : startGPSFollow();
 
-// --- Dead Tree button ---
+// --- Dead Tree icon using DivIcon ---
+const deadTreeIcon = L.divIcon({
+    className: "dead-tree-icon",
+    html: `
+        <div style="position: relative; width: 32px; height: 32px; text-align: center;">
+            <div style="color:black; font-size:16px;">&#129504;</div> <!-- skull -->
+            <div style="position:absolute; top:18px; left:8px; font-size:16px; color:green;">&#127794;</div> <!-- tree -->
+        </div>
+    `,
+    iconSize: [32,32],
+    iconAnchor: [16,32]
+});
+
+// Dead Tree button
 document.getElementById("btn-dead").onclick = () => {
     if (!latestGPS) { alert("GPS not ready yet"); return; }
     const [lat, lng] = latestGPS;
@@ -151,7 +159,6 @@ document.getElementById("btn-export").onclick = () => {
     const kmlFooter = "</Document></kml>";
     let kmlPlacemarks = "";
 
-    // Vegetation paths
     for (let type in vegetationLatLngs) {
         const coords = vegetationLatLngs[type].map(p => `${p[1]},${p[0]},0`).join(" ");
         if (coords.length>0) {
@@ -159,7 +166,6 @@ document.getElementById("btn-export").onclick = () => {
         }
     }
 
-    // Dead tree markers
     for (const marker of deadTreeMarkers) {
         const pos = marker.getLatLng();
         kmlPlacemarks += `<Placemark><name>dead</name><Point><coordinates>${pos.lng},${pos.lat},0</coordinates></Point></Placemark>`;
