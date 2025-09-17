@@ -62,6 +62,7 @@ for (let type in vegetationTypes) {
 let isRecording = false;
 let followGPS = false;
 let currentVegetation = "Light";
+let activeVegBtn = null;
 let points = [];
 let lines = [];
 let markerLayer = L.layerGroup().addTo(map);
@@ -97,14 +98,19 @@ document.getElementById('saveBtn').onclick = () => {
   dlAnchor.click();
 };
 
-// Vegetation type buttons
+// Vegetation button click handler
 document.querySelectorAll('.vegBtn').forEach(btn => {
   btn.addEventListener('click', () => {
     currentVegetation = btn.dataset.type;
+
+    // Highlight active button
+    if (activeVegBtn) activeVegBtn.style.backgroundColor = '';
+    btn.style.backgroundColor = '#ddd'; // Highlight color
+    activeVegBtn = btn;
   });
 });
 
-// Map click for adding vegetation points
+// Map click for placing vegetation markers
 map.on('click', e => {
   const lat = e.latlng.lat;
   const lng = e.latlng.lng;
@@ -129,7 +135,7 @@ map.on('click', e => {
     }
   }
 
-  // Dead Tree deletion only on marker click
+  // Dead Tree click-to-delete
   if (currentVegetation === "Dead Tree") {
     marker.on('click', () => {
       markerLayer.removeLayer(marker);
