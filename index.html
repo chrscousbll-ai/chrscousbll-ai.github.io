@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Vegetation Mapping – Final KML with Location Filter</title>
+<title>Vegetation Mapping – Final KML (Free Zoom)</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <style>
   html, body { margin:0; padding:0; height:100%; }
@@ -39,20 +39,24 @@
 <script src="https://unpkg.com/togeojson@0.16.0/dist/togeojson.umd.js"></script>
 
 <script>
-const map = L.map('map').fitWorld();
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
-  maxZoom:19, attribution:'&copy; OpenStreetMap contributors'
+// ---- Map setup ----
+const map = L.map('map');   // removed .fitWorld()
+
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  maxZoom: 19,
+  minZoom: 1,   // allow zooming out to world view
+  attribution:'&copy; OpenStreetMap contributors'
 }).addTo(map);
 
-// Request higher-quality fixes and don't reuse old ones
+// Request higher-quality fixes but do NOT auto-center
 map.locate({
-  setView: true,
   watch: true,
   enableHighAccuracy: true,
   maximumAge: 0,
   timeout: 10000
 });
 
+// ---- State variables ----
 let recording = false;
 let follow = false;
 let currentColor = null;
@@ -61,6 +65,7 @@ let polylines = [];
 let markers = [];
 let userMarker = null;   // persistent location marker
 
+// ---- Functions ----
 function startNewLine(color) {
   polyline = L.polyline([], {color: color, weight:4}).addTo(map);
   polylines.push(polyline);
@@ -93,10 +98,12 @@ function updatePosition(e) {
 
   if (recording && polyline) polyline.addLatLng(latlng);
 
+  // Pan only if follow mode is on
   if (follow) map.panTo(latlng);
 }
 map.on('locationfound', updatePosition);
 
+// ---- UI bindings ----
 document.querySelectorAll('.veg').forEach(btn=>{
   btn.addEventListener('click', ()=>{
     document.querySelectorAll('.veg').forEach(b=>b.classList.remove('active'));
@@ -138,7 +145,7 @@ document.getElementById('clearAll').onclick = () => {
   polylines=[]; markers=[]; userMarker=null;
 };
 
-// Updated Save KML function (with safe download trigger)
+// ---- Save KML ----
 function saveKML(){
   let kml = `<?xml version="1.0" encoding="UTF-8"?>\n<kml xmlns="http://www.opengis.net/kml/2.2">\n<Document>\n`;
   polylines.forEach((line,i)=>{
