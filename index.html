@@ -58,11 +58,8 @@
     // Vegetation selection
     function selectVegetation(type) {
       currentVegType = type;
-
-      // Stop previous line so new type starts fresh
       currentLine = null;
 
-      // Initialize storage for this type
       if (!lines[currentVegType]) lines[currentVegType] = [];
 
       // Highlight selected button
@@ -71,16 +68,14 @@
       document.getElementById(btnId).classList.add('highlight');
     }
 
-    // Add GPS point
+    // Add GPS point (manual click or GPS update)
     function addGPSPoint(lat, lng) {
       if (!currentVegType) return;
 
       if (currentVegType === 'deadTree') {
-        // Place dead tree marker
         const marker = L.marker([lat, lng]).addTo(map).bindPopup("Dead Tree");
         deadTrees.push(marker);
       } else {
-        // Draw line for selected vegetation
         if (!currentLine) {
           currentLine = L.polyline([[lat, lng]], { color: vegColors[currentVegType], weight: 5 }).addTo(map);
           lines[currentVegType].push(currentLine);
@@ -90,7 +85,7 @@
       }
     }
 
-    // Example: add point on click (can be replaced with live GPS updates)
+    // Example: manual click to add points (can replace with GPS updates)
     map.on('click', function(e) {
       addGPSPoint(e.latlng.lat, e.latlng.lng);
     });
