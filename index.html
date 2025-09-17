@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Vegetation Mapping – Final KML (Stable Save)</title>
+<title>Vegetation Mapping – Final KML (Data URL Save)</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <style>
   html, body { margin:0; padding:0; height:100%; }
@@ -133,34 +133,41 @@ document.getElementById('clearAll').onclick = () => {
   polylines=[]; markers=[]; userMarker=null;
 };
 
-// ---- Robust Save KML ----
+// ---- Save KML using data: URL ----
 function saveKML(){
   if (!polylines.length && !markers.length) {
     alert("Nothing to save. Draw a path or add a marker first.");
     return;
   }
-  let kml = `<?xml version="1.0" encoding="UTF-8"?>\n<kml xmlns="http://www.opengis.net/kml/2.2">\n<Document>\n`;
+  let kml = '<?xml version="1.0" encoding="UTF-8"?>\n' +
+            '<kml xmlns="http://www.opengis.net/kml/2.2">\n<Document>\n';
+
   polylines.forEach((line,i)=>{
-    const coords = line.getLatLngs().map(ll=>`${ll.lng},${ll.lat},0`).join(' ');
-    kml += `<Placemark><name>Path ${i+1}</name><Style><LineStyle><color>${colorToKML(line.options.color)}</color><width>4</width></LineStyle></Style><LineString><coordinates>${coords}</coordinates></LineString></Placemark>\n`;
+    const coords = line.getLatLngs()
+       .map(ll => `${ll.lng},${ll.lat},0`)
+       .join(' ');
+    kml += `<Placemark><name>Path ${i+1}</name>` +
+           `<Style><LineStyle><color>${colorToKML(line.options.color)}</color><width>4</width></LineStyle></Style>` +
+           `<LineString><coordinates>${coords}</coordinates></LineString></Placemark>\n`;
   });
+
   markers.forEach((m,i)=>{
     const ll = m.getLatLng();
-    kml += `<Placemark><name>Dead Tree ${i+1}</name><Point><coordinates>${ll.lng},${ll.lat},0</coordinates></Point></Placemark>\n`;
+    kml += `<Placemark><name>Dead Tree ${i+1}</name>` +
+           `<Point><coordinates>${ll.lng},${ll.lat},0</coordinates></Point></Placemark>\n`;
   });
-  kml += `</Document></kml>`;
 
-  const blob = new Blob([kml], {type:'application/vnd.google-earth.kml+xml'});
-  const url  = URL.createObjectURL(blob);
+  kml += '</Document></kml>';
 
-  // Force the download inside the user gesture
+  const dataUrl = 'data:application/vnd.google-earth.kml+xml;charset=utf-8,' +
+                  encodeURIComponent(kml);
+
   const a = document.createElement('a');
-  a.href = url;
+  a.href = dataUrl;
   a.download = 'vegetation.kml';
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
-  URL.revokeObjectURL(url);
 }
 
 function colorToKML(c){
