@@ -60,10 +60,52 @@
       btn.style.background = vegetationTypes[type];
       btn.onclick = () => {
         currentType = type;
-        currentLine = null; // reset so we always start a fresh line
+        currentLine = null; // always start a fresh line
       };
       legendDiv.appendChild(btn);
     }
+
+    // Add a Save button for KML export
+    const saveBtn = document.createElement("button");
+    saveBtn.innerText = "Save as KML";
+    saveBtn.style.background = "orange";
+    saveBtn.onclick = () => {
+      let kml = `<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+<Document>
+  <name>Vegetation Map</name>
+  ${allLines.map(line => {
+    let coords = line.getLatLngs()
+      .map(p => `${p.lng},${p.lat},0`)
+      .join(" ");
+    return `
+    <Placemark>
+      <Style>
+        <LineStyle>
+          <color>ff${line.options.color === "green" ? "00ff00" :
+                      line.options.color === "lime" ? "99ff00" :
+                      line.options.color === "blue" ? "ff0000ff" :
+                      line.options.color === "brown" ? "336633" :
+                      "aaaaaa"}</color>
+          <width>3</width>
+        </LineStyle>
+      </Style>
+      <LineString>
+        <coordinates>${coords}</coordinates>
+      </LineString>
+    </Placemark>`;
+  }).join("")}
+</Document>
+</kml>`;
+      let blob = new Blob([kml], { type: "application/vnd.google-earth.kml+xml" });
+      let url = URL.createObjectURL(blob);
+      let a = document.createElement("a");
+      a.href = url;
+      a.download = "vegetation_map.kml";
+      a.click();
+      URL.revokeObjectURL(url);
+    };
+    legendDiv.appendChild(saveBtn);
 
     // Add point on map click
     map.on("click", function(e) {
@@ -77,7 +119,7 @@
         currentLine = L.polyline([e.latlng], { color: vegetationTypes[currentType] }).addTo(map);
         allLines.push(currentLine);
       } else {
-        // Continue the current line
+        // Continue current line
         currentLine.addLatLng(e.latlng);
       }
     });
