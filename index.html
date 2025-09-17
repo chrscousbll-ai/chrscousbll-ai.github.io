@@ -15,12 +15,12 @@
       padding: 10px;
       border-radius: 12px;
       box-shadow: 0 2px 6px rgba(0,0,0,0.3);
-      max-height: 90vh;       /* keeps it inside screen */
-      overflow-y: auto;       /* scroll only if needed */
+      max-height: 90vh;
+      overflow-y: auto;
     }
     .button-bar button {
       display: block;
-      width: 140px;
+      width: 160px;
       margin: 5px 0;
       padding: 8px;
       font-size: 14px;
@@ -34,8 +34,9 @@
 </head>
 <body>
   <div class="button-bar">
-    <button onclick="selectVegetation('grass')" id="btnGrass">Grass</button>
-    <button onclick="selectVegetation('brush')" id="btnBrush">Brush</button>
+    <button onclick="selectVegetation('conifer')" id="btnConifer">Conifer</button>
+    <button onclick="selectVegetation('deciduous')" id="btnDeciduous">Deciduous</button>
+    <button onclick="selectVegetation('mixed')" id="btnMixed">Mixed</button>
     <button onclick="selectVegetation('deadTree')" id="btnDeadTree">Dead Tree</button>
     <button onclick="saveKML()">Save KML</button>
   </div>
@@ -48,9 +49,12 @@
     let currentLine = null;
     let lines = {};
     let deadTrees = [];
+
+    // Colors for your vegetation categories
     const vegColors = {
-      grass: 'green',
-      brush: 'orange',
+      conifer: 'green',
+      deciduous: 'blue',
+      mixed: 'orange',
       deadTree: 'brown'
     };
 
@@ -73,8 +77,10 @@
 
       // Highlight selected button
       document.querySelectorAll('.button-bar button').forEach(btn => btn.classList.remove('highlight'));
-      const btnId = type === 'deadTree' ? 'btnDeadTree' : 'btn' + type.charAt(0).toUpperCase() + type.slice(1);
-      document.getElementById(btnId).classList.add('highlight');
+      const btnId = 'btn' + type.charAt(0).toUpperCase() + type.slice(1);
+      if (document.getElementById(btnId)) {
+        document.getElementById(btnId).classList.add('highlight');
+      }
     }
 
     // Add GPS point (manual click or GPS update)
@@ -94,7 +100,7 @@
       }
     }
 
-    // Example: manual click to add points (can replace with GPS updates)
+    // Example: manual click to add points (replace later with GPS)
     map.on('click', function(e) {
       addGPSPoint(e.latlng.lat, e.latlng.lng);
     });
