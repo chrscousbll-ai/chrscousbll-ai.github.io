@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Vegetation Mapping – Final KML</title>
+<title>Vegetation Mapping – Final KML with Location Indicator</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <style>
   html, body { margin:0; padding:0; height:100%; }
@@ -44,6 +44,7 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
   maxZoom:19, attribution:'&copy; OpenStreetMap contributors'
 }).addTo(map);
 
+// Start GPS tracking (but do not auto-pan unless follow is true)
 map.locate({setView:true, watch:true, enableHighAccuracy:true});
 
 let recording = false;
@@ -52,6 +53,7 @@ let currentColor = null;
 let polyline = null;
 let polylines = [];
 let markers = [];
+let userMarker = null;   // NEW: persistent location marker
 
 function startNewLine(color) {
   polyline = L.polyline([], {color: color, weight:4}).addTo(map);
@@ -60,13 +62,30 @@ function startNewLine(color) {
 
 function toggleRecording() {
   recording = !recording;
-  document.getElementById('startStop').textContent = recording ? 'Stop Recording' : 'Start Recording';
+  document.getElementById('startStop').textContent =
+    recording ? 'Stop Recording' : 'Start Recording';
   if (recording && currentColor) startNewLine(currentColor);
 }
 
 function updatePosition(e) {
   const latlng = e.latlng;
+
+  // Always show/update the blue-dot location marker
+  if (!userMarker) {
+    userMarker = L.circleMarker(latlng, {
+      radius: 7,
+      color: '#3388ff',
+      fillColor: '#3388ff',
+      fillOpacity: 0.8
+    }).addTo(map);
+  } else {
+    userMarker.setLatLng(latlng);
+  }
+
+  // Add to polyline if recording
   if (recording && polyline) polyline.addLatLng(latlng);
+
+  // Pan only if follow mode is on
   if (follow) map.panTo(latlng);
 }
 map.on('locationfound', updatePosition);
@@ -106,11 +125,11 @@ document.getElementById('clearLast').onclick = () => {
 document.getElementById('clearAll').onclick = () => {
   polylines.forEach(l=>map.removeLayer(l));
   markers.forEach(m=>map.removeLayer(m));
-  polylines=[]; markers=[];
+  if (userMarker) userMarker.remove();
+  polylines=[]; markers=[]; userMarker=null;
 };
 
 function saveKML(){
-  // Build simple KML
   let kml = `<?xml version="1.0" encoding="UTF-8"?>\n<kml xmlns="http://www.opengis.net/kml/2.2">\n<Document>\n`;
   polylines.forEach((line,i)=>{
     const coords = line.getLatLngs().map(ll=>`${ll.lng},${ll.lat},0`).join(' ');
@@ -130,7 +149,6 @@ function saveKML(){
 }
 
 function colorToKML(c){
-  // KML uses aabbggrr
   const ctx = document.createElement('canvas').getContext('2d');
   ctx.fillStyle = c;
   const rgb = ctx.fillStyle.match(/\d+/g).map(Number);
