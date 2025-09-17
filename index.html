@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Vegetation Mapping – Final KML with Location Indicator & Tree Icon</title>
+<title>Vegetation Mapping – Final KML with Location Indicator & Stable Save</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <style>
   html, body { margin:0; padding:0; height:100%; }
@@ -44,7 +44,6 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
   maxZoom:19, attribution:'&copy; OpenStreetMap contributors'
 }).addTo(map);
 
-// Start GPS tracking (but do not auto-pan unless follow is true)
 map.locate({setView:true, watch:true, enableHighAccuracy:true});
 
 let recording = false;
@@ -82,10 +81,8 @@ function updatePosition(e) {
     userMarker.setLatLng(latlng);
   }
 
-  // Add to polyline if recording
   if (recording && polyline) polyline.addLatLng(latlng);
 
-  // Pan only if follow mode is on
   if (follow) map.panTo(latlng);
 }
 map.on('locationfound', updatePosition);
@@ -109,7 +106,6 @@ document.getElementById('followGps').onclick = () => {
 document.getElementById('deadTree').onclick = () => {
   if (!map.getCenter()) return;
   const center = map.getCenter();
-  // Stable evergreen tree icon
   const icon = L.icon({
     iconUrl: 'https://cdn.jsdelivr.net/gh/pointhi/leaflet-color-markers/img/marker-icon-green.png',
     iconSize: [25, 41],
@@ -132,6 +128,7 @@ document.getElementById('clearAll').onclick = () => {
   polylines=[]; markers=[]; userMarker=null;
 };
 
+// -------- Updated Save KML function --------
 function saveKML(){
   let kml = `<?xml version="1.0" encoding="UTF-8"?>\n<kml xmlns="http://www.opengis.net/kml/2.2">\n<Document>\n`;
   polylines.forEach((line,i)=>{
@@ -143,13 +140,22 @@ function saveKML(){
     kml += `<Placemark><name>Dead Tree ${i+1}</name><Point><coordinates>${ll.lng},${ll.lat},0</coordinates></Point></Placemark>\n`;
   });
   kml += `</Document></kml>`;
-  const blob = new Blob([kml],{type:'application/vnd.google-earth.kml+xml'});
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = 'vegetation.kml';
-  a.click();
-  URL.revokeObjectURL(url);
+
+  const blob = new Blob([kml], {type:'application/vnd.google-earth.kml+xml'});
+  const url  = URL.createObjectURL(blob);
+
+  // Delay to ensure user-gesture context
+  setTimeout(() => {
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'vegetation.kml';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, 0);
 }
+// -------------------------------------------
 
 function colorToKML(c){
   const ctx = document.createElement('canvas').getContext('2d');
