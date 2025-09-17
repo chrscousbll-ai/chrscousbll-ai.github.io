@@ -9,7 +9,7 @@
   body, html { margin:0; padding:0; height:100%; }
   #map { height:100%; }
   .control-buttons { position:absolute; top:10px; left:10px; z-index:1000; }
-  .control-buttons button { display:block; margin-bottom:5px; padding:5px 10px; }
+  .control-buttons button { display:block; margin-bottom:10px; padding:10px 15px; font-size:16px; }
   .legend { position:absolute; bottom:10px; left:10px; z-index:1000; background:white; padding:5px; border-radius:5px; }
   .legend div { margin-bottom:3px; }
 </style>
@@ -120,7 +120,7 @@ map.on('click', e => {
     }
   }
 
-  // Dead Tree special behavior (like before): allow single-click deletion
+  // Dead Tree special behavior: single-click deletion
   if (currentVegetation === "Dead Tree") {
     marker.on('click', () => {
       markerLayer.removeLayer(marker);
@@ -129,14 +129,24 @@ map.on('click', e => {
   }
 });
 
-// GPS tracking
+// GPS tracking with live marker
+let gpsMarker = null;
 if (navigator.geolocation) {
   navigator.geolocation.watchPosition(pos => {
     let latlng = [pos.coords.latitude, pos.coords.longitude];
+
+    if (!gpsMarker) {
+      gpsMarker = L.marker(latlng, {title: "You"}).addTo(map);
+    } else {
+      gpsMarker.setLatLng(latlng);
+    }
+
     if (followGPS) {
       map.setView(latlng);
     }
-  });
+  }, err => {
+    console.warn("GPS error:", err);
+  }, {enableHighAccuracy:true});
 }
 </script>
 </body>
