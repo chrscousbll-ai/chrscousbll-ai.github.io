@@ -6,8 +6,20 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
   <style>
     #map { height: 100vh; }
-    .button-bar { position: absolute; top: 10px; left: 10px; z-index: 1000; }
-    .button-bar button { display: block; margin: 5px 0; padding: 8px; }
+    .button-bar {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      z-index: 1000;
+      background: rgba(255,255,255,0.9);
+      padding: 10px;
+      border-radius: 8px;
+    }
+    .button-bar button {
+      display: block;
+      margin: 5px 0;
+      padding: 8px;
+    }
     .highlight { background-color: yellow; }
   </style>
 </head>
@@ -22,7 +34,6 @@
 
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
   <script>
-    // Map setup
     const map = L.map('map');
     let currentVegType = null;
     let currentLine = null;
@@ -34,7 +45,7 @@
       deadTree: 'brown'
     };
 
-    // Initialize map at current location
+    // Center map on GPS location
     map.locate({ setView: true, maxZoom: 18 });
     map.on('locationfound', (e) => {
       L.marker(e.latlng).addTo(map).bindPopup("You are here").openPopup();
@@ -47,18 +58,13 @@
     // Vegetation selection
     function selectVegetation(type) {
       currentVegType = type;
-      currentLine = null; // stop any previous line
+      currentLine = null;
 
-      // Initialize storage for this type
       if (!lines[currentVegType]) lines[currentVegType] = [];
 
-      // Update button highlights
       document.querySelectorAll('.button-bar button').forEach(btn => btn.classList.remove('highlight'));
-      document.getElementById('btn' + capitalize(type)).classList.add('highlight');
-    }
-
-    function capitalize(str) {
-      return str.charAt(0).toUpperCase() + str.slice(1);
+      const btnId = type === 'deadTree' ? 'btnDeadTree' : 'btn' + type.charAt(0).toUpperCase() + type.slice(1);
+      document.getElementById(btnId).classList.add('highlight');
     }
 
     // Add GPS point
@@ -66,7 +72,6 @@
       if (!currentVegType) return;
 
       if (currentVegType === 'deadTree') {
-        // Place a dead tree marker instead of a line
         const marker = L.marker([lat, lng]).addTo(map).bindPopup("Dead Tree");
         deadTrees.push(marker);
       } else {
@@ -79,11 +84,9 @@
       }
     }
 
-    // Simulate GPS tracking (replace with real GPS updates)
-    map.on('locationfound', (e) => {
-      setInterval(() => {
-        addGPSPoint(e.latlng.lat + Math.random()/1000, e.latlng.lng + Math.random()/1000);
-      }, 3000);
+    // Example: add point on click (for testing)
+    map.on('click', function(e) {
+      addGPSPoint(e.latlng.lat, e.latlng.lng);
     });
 
     // Save to KML
