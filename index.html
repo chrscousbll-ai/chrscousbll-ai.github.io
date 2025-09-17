@@ -22,7 +22,7 @@
   <button id="stopBtn">Stop Recording</button>
   <button id="clearLastBtn">Clear Last Line</button>
   <button id="clearAllBtn">Clear All Lines</button>
-  <button id="saveBtn">Save</button>
+  <button id="saveBtn">Save (KML)</button>
   <hr>
   <button class="vegBtn" data-type="Light">Light</button>
   <button class="vegBtn" data-type="Medium">Medium</button>
@@ -37,9 +37,7 @@
 let map = L.map('map').setView([45.0, -69.0], 13);
 
 // Base layer
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-  maxZoom: 19
-}).addTo(map);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
 
 // Vegetation types and colors
 const vegetationTypes = {
@@ -69,11 +67,11 @@ let markerLayer = L.layerGroup().addTo(map);
 let gpsMarker = null;
 let currentLine = null;
 
-// Center map on current GPS when loaded
+// Center map on GPS when loaded
 if (navigator.geolocation) {
   navigator.geolocation.getCurrentPosition(pos => {
     const latlng = [pos.coords.latitude, pos.coords.longitude];
-    map.setView(latlng, 16); // zoom to current location
+    map.setView(latlng, 16);
   }, err => console.warn("GPS error:", err), {enableHighAccuracy:true});
 }
 
@@ -86,7 +84,7 @@ document.getElementById('followBtn').onclick = () => {
 // Start/Stop Recording
 document.getElementById('startBtn').onclick = () => { 
   isRecording = true; 
-  currentLine = null; // Start a new line
+  currentLine = null; 
 };
 document.getElementById('stopBtn').onclick = () => { 
   isRecording = false; 
@@ -102,13 +100,47 @@ document.getElementById('clearAllBtn').onclick = () => {
   lines = [];
 };
 
-// Save GeoJSON
+// Save as KML for Google Maps
 document.getElementById('saveBtn').onclick = () => {
-  let geojson = markerLayer.toGeoJSON();
-  let dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(geojson));
-  let dlAnchor = document.createElement('a');
+  let kml = `<?xml version="1.0" encoding="UTF-8"?>
+  <kml xmlns="http://www.opengis.net/kml/2.2">
+    <Document>
+      <name>Vegetation Map</name>`;
+
+  // Add Dead Tree points
+  points.forEach(p => {
+    if (p.type === "Dead Tree") {
+      kml += `
+      <Placemark>
+        <name>${p.type}</name>
+        <Point>
+          <coordinates>${p.lng},${p.lat},0</coordinates>
+        </Point>
+      </Placemark>`;
+    }
+  });
+
+  // Add lines for other vegetation types
+  lines.forEach((line, index) => {
+    const latlngs = line.getLatLngs();
+    let coords = latlngs.map(ll => `${ll.lng},${ll.lat},0`).join(' ');
+    kml += `
+    <Placemark>
+      <name>Path ${index + 1} (${currentVegetation})</name>
+      <LineString>
+        <coordinates>${coords}</coordinates>
+      </LineString>
+    </Placemark>`;
+  });
+
+  kml += `
+    </Document>
+  </kml>`;
+
+  const dataStr = "data:text/xml;charset=utf-8," + encodeURIComponent(kml);
+  const dlAnchor = document.createElement('a');
   dlAnchor.setAttribute("href", dataStr);
-  dlAnchor.setAttribute("download", "vegetation_map.geojson");
+  dlAnchor.setAttribute("download", "vegetation_map.kml");
   dlAnchor.click();
 };
 
@@ -117,7 +149,7 @@ document.querySelectorAll('.vegBtn').forEach(btn => {
   btn.addEventListener('click', () => {
     const type = btn.dataset.type;
 
-    // Dead Tree: one-time action
+    // Dead Tree: one-time action at GPS location
     if (type === "Dead Tree") {
       if (gpsMarker) {
         const latlng = gpsMarker.getLatLng();
