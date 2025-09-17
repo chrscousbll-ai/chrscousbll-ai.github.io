@@ -1,128 +1,129 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Vegetation Mapping</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
-  <style>
-    #map { height: 100vh; width: 100%; }
-    .legend {
-      background: white;
-      padding: 8px;
-      border-radius: 8px;
-      box-shadow: 0 0 6px rgba(0,0,0,0.3);
-      position: absolute;
-      top: 10px;
-      left: 10px;
-      z-index: 1000;
-    }
-    .legend button {
-      display: block;
-      margin: 4px 0;
-      width: 100%;
-      padding: 6px;
-      border: none;
-      border-radius: 6px;
-      cursor: pointer;
-    }
-  </style>
+<meta charset="utf-8" />
+<title>Vegetation Map</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<style>
+  body, html { margin:0; padding:0; height:100%; }
+  #map { height:100%; }
+  .control-buttons { position:absolute; top:10px; left:10px; z-index:1000; }
+  .control-buttons button { display:block; margin-bottom:5px; padding:5px 10px; }
+  .legend { position:absolute; bottom:10px; left:10px; z-index:1000; background:white; padding:5px; border-radius:5px; }
+  .legend div { margin-bottom:3px; }
+</style>
 </head>
 <body>
-  <div id="map"></div>
-  <div class="legend" id="legend"></div>
+<div id="map"></div>
+<div class="control-buttons">
+  <button id="followBtn">Follow GPS</button>
+  <button id="startBtn">Start Recording</button>
+  <button id="stopBtn">Stop Recording</button>
+  <button id="clearLastBtn">Clear Last Line</button>
+  <button id="clearAllBtn">Clear All Lines</button>
+  <button id="saveBtn">Save</button>
+</div>
+<div class="legend" id="legend"></div>
 
-  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-  <script>
-    // Vegetation types with colors
-    const vegetationTypes = {
-      "Forest": "green",
-      "Grass": "lime",
-      "Wetland": "blue",
-      "Shrub": "brown",
-      "Dead Tree": "gray"
-    };
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+let map = L.map('map').setView([45.0, -69.0], 13);
 
-    let map = L.map("map").setView([45.0, -69.0], 13);
+// Base layer
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  maxZoom: 19
+}).addTo(map);
 
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      maxZoom: 19
-    }).addTo(map);
+// Vegetation types (restored to your custom setup)
+const vegetationTypes = {
+  "Grass": "green",
+  "Shrub": "darkgreen",
+  "Dead Tree": "brown",
+  "Wetland": "blue"
+};
 
-    let currentType = null;
-    let currentLine = null;
-    let allLines = [];
+// Legend
+let legend = document.getElementById('legend');
+for (let type in vegetationTypes) {
+  let div = document.createElement('div');
+  div.innerHTML = `<span style="display:inline-block;width:12px;height:12px;background:${vegetationTypes[type]};margin-right:5px;"></span>${type}`;
+  legend.appendChild(div);
+}
 
-    // Build legend buttons
-    const legendDiv = document.getElementById("legend");
-    for (let type in vegetationTypes) {
-      const btn = document.createElement("button");
-      btn.innerText = type;
-      btn.style.background = vegetationTypes[type];
-      btn.onclick = () => {
-        currentType = type;
-        currentLine = null; // always start a fresh line
-      };
-      legendDiv.appendChild(btn);
+// State
+let isRecording = false;
+let followGPS = false;
+let currentVegetation = "Grass";
+let points = [];
+let lines = [];
+let markerLayer = L.layerGroup().addTo(map);
+
+// Follow GPS
+document.getElementById('followBtn').onclick = () => {
+  followGPS = !followGPS;
+  document.getElementById('followBtn').innerText = followGPS ? "Following GPS" : "Follow GPS";
+};
+
+// Recording
+document.getElementById('startBtn').onclick = () => { isRecording = true; };
+document.getElementById('stopBtn').onclick = () => { isRecording = false; };
+
+// Clear
+document.getElementById('clearLastBtn').onclick = () => {
+  if (lines.length) {
+    map.removeLayer(lines.pop());
+  }
+};
+document.getElementById('clearAllBtn').onclick = () => {
+  lines.forEach(l => map.removeLayer(l));
+  lines = [];
+};
+
+// Save
+document.getElementById('saveBtn').onclick = () => {
+  let geojson = markerLayer.toGeoJSON();
+  let dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(geojson));
+  let dlAnchor = document.createElement('a');
+  dlAnchor.setAttribute("href", dataStr);
+  dlAnchor.setAttribute("download", "vegetation_map.geojson");
+  dlAnchor.click();
+};
+
+// Change vegetation type
+function setVegetationType(type) {
+  currentVegetation = type;
+  // Only changes type, does NOT draw a line
+}
+
+// Add vegetation marker on click
+map.on('click', e => {
+  let marker = L.circleMarker(e.latlng, {
+    color: vegetationTypes[currentVegetation],
+    radius: 6
+  }).addTo(markerLayer);
+  marker.bindPopup(currentVegetation);
+  points.push({lat: e.latlng.lat, lng: e.latlng.lng, type: currentVegetation});
+
+  if (isRecording && points.length > 1) {
+    // Draw line only between consecutive points of same vegetation if recording
+    let lastPoint = points[points.length-2];
+    if (lastPoint.type === currentVegetation) {
+      let line = L.polyline([ [lastPoint.lat, lastPoint.lng], [e.latlng.lat, e.latlng.lng] ], {color: vegetationTypes[currentVegetation]}).addTo(map);
+      lines.push(line);
     }
+  }
+});
 
-    // Add a Save button for KML export
-    const saveBtn = document.createElement("button");
-    saveBtn.innerText = "Save as KML";
-    saveBtn.style.background = "orange";
-    saveBtn.onclick = () => {
-      let kml = `<?xml version="1.0" encoding="UTF-8"?>
-<kml xmlns="http://www.opengis.net/kml/2.2">
-<Document>
-  <name>Vegetation Map</name>
-  ${allLines.map(line => {
-    let coords = line.getLatLngs()
-      .map(p => `${p.lng},${p.lat},0`)
-      .join(" ");
-    return `
-    <Placemark>
-      <Style>
-        <LineStyle>
-          <color>ff${line.options.color === "green" ? "00ff00" :
-                      line.options.color === "lime" ? "99ff00" :
-                      line.options.color === "blue" ? "ff0000ff" :
-                      line.options.color === "brown" ? "336633" :
-                      "aaaaaa"}</color>
-          <width>3</width>
-        </LineStyle>
-      </Style>
-      <LineString>
-        <coordinates>${coords}</coordinates>
-      </LineString>
-    </Placemark>`;
-  }).join("")}
-</Document>
-</kml>`;
-      let blob = new Blob([kml], { type: "application/vnd.google-earth.kml+xml" });
-      let url = URL.createObjectURL(blob);
-      let a = document.createElement("a");
-      a.href = url;
-      a.download = "vegetation_map.kml";
-      a.click();
-      URL.revokeObjectURL(url);
-    };
-    legendDiv.appendChild(saveBtn);
-
-    // Add point on map click
-    map.on("click", function(e) {
-      if (!currentType) {
-        alert("Select a vegetation type first!");
-        return;
-      }
-
-      if (!currentLine) {
-        // Start a new polyline for this type
-        currentLine = L.polyline([e.latlng], { color: vegetationTypes[currentType] }).addTo(map);
-        allLines.push(currentLine);
-      } else {
-        // Continue current line
-        currentLine.addLatLng(e.latlng);
-      }
-    });
-  </script>
+// GPS tracking
+if (navigator.geolocation) {
+  navigator.geolocation.watchPosition(pos => {
+    let latlng = [pos.coords.latitude, pos.coords.longitude];
+    if (followGPS) {
+      map.setView(latlng);
+    }
+  });
+}
+</script>
 </body>
 </html>
