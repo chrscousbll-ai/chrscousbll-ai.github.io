@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Vegetation Mapping – Final KML (Free Zoom + Default View)</title>
+<title>Vegetation Mapping – Final KML (Stable Save)</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <style>
   html, body { margin:0; padding:0; height:100%; }
@@ -40,16 +40,14 @@
 
 <script>
 // ---- Map setup ----
-// Start with a world view so tiles show immediately
 const map = L.map('map').setView([0, 0], 2);
-
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   maxZoom: 19,
-  minZoom: 1,   // allow zooming out to world view
+  minZoom: 1,
   attribution:'&copy; OpenStreetMap contributors'
 }).addTo(map);
 
-// Request higher-quality fixes but do NOT auto-center
+// Request GPS but don't auto-center
 map.locate({
   watch: true,
   enableHighAccuracy: true,
@@ -57,14 +55,14 @@ map.locate({
   timeout: 10000
 });
 
-// ---- State variables ----
+// ---- State ----
 let recording = false;
 let follow = false;
 let currentColor = null;
 let polyline = null;
 let polylines = [];
 let markers = [];
-let userMarker = null;   // persistent location marker
+let userMarker = null;
 
 // ---- Functions ----
 function startNewLine(color) {
@@ -80,12 +78,8 @@ function toggleRecording() {
 }
 
 function updatePosition(e) {
-  // Skip poor fixes (accuracy worse than 10 m)
-  if (e.accuracy && e.accuracy > 10) return;
-
+  if (e.accuracy && e.accuracy > 10) return; // skip poor fixes
   const latlng = e.latlng;
-
-  // Always show/update the blue-dot location marker
   if (!userMarker) {
     userMarker = L.circleMarker(latlng, {
       radius: 7,
@@ -96,15 +90,11 @@ function updatePosition(e) {
   } else {
     userMarker.setLatLng(latlng);
   }
-
   if (recording && polyline) polyline.addLatLng(latlng);
-
-  // Pan only if follow mode is on
   if (follow) map.panTo(latlng);
 }
 map.on('locationfound', updatePosition);
 
-// ---- UI bindings ----
 document.querySelectorAll('.veg').forEach(btn=>{
   btn.addEventListener('click', ()=>{
     document.querySelectorAll('.veg').forEach(b=>b.classList.remove('active'));
@@ -115,14 +105,12 @@ document.querySelectorAll('.veg').forEach(btn=>{
 });
 
 document.getElementById('startStop').onclick = toggleRecording;
-
 document.getElementById('followGps').onclick = () => {
   follow = !follow;
   document.getElementById('followGps').classList.toggle('active', follow);
 };
 
 document.getElementById('deadTree').onclick = () => {
-  if (!map.getCenter()) return;
   const center = map.getCenter();
   const icon = L.icon({
     iconUrl: 'https://cdn.jsdelivr.net/gh/pointhi/leaflet-color-markers/img/marker-icon-green.png',
@@ -138,7 +126,6 @@ document.getElementById('clearLast').onclick = () => {
   const last = polylines.pop();
   if (last) map.removeLayer(last);
 };
-
 document.getElementById('clearAll').onclick = () => {
   polylines.forEach(l=>map.removeLayer(l));
   markers.forEach(m=>map.removeLayer(m));
@@ -146,8 +133,12 @@ document.getElementById('clearAll').onclick = () => {
   polylines=[]; markers=[]; userMarker=null;
 };
 
-// ---- Save KML ----
+// ---- Robust Save KML ----
 function saveKML(){
+  if (!polylines.length && !markers.length) {
+    alert("Nothing to save. Draw a path or add a marker first.");
+    return;
+  }
   let kml = `<?xml version="1.0" encoding="UTF-8"?>\n<kml xmlns="http://www.opengis.net/kml/2.2">\n<Document>\n`;
   polylines.forEach((line,i)=>{
     const coords = line.getLatLngs().map(ll=>`${ll.lng},${ll.lat},0`).join(' ');
@@ -162,15 +153,14 @@ function saveKML(){
   const blob = new Blob([kml], {type:'application/vnd.google-earth.kml+xml'});
   const url  = URL.createObjectURL(blob);
 
-  setTimeout(() => {
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'vegetation.kml';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  }, 0);
+  // Force the download inside the user gesture
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'vegetation.kml';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 function colorToKML(c){
@@ -181,7 +171,7 @@ function colorToKML(c){
 }
 function toHex(n){ return n.toString(16).padStart(2,'0'); }
 
-document.getElementById('saveKML').onclick = saveKML;
+document.getElementById('saveKML').addEventListener('click', saveKML);
 </script>
 </body>
 </html>
