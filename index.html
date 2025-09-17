@@ -1,127 +1,34 @@
-<!DOCTYPE html>
-<html>
-<head>
-  <title>Vegetation Mapping</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
-  <style>
-    #map { height: 100vh; }
-    .button-bar {
-      position: absolute;
-      top: 10px;
-      left: 10px;
-      z-index: 1000;
-      background: rgba(255,255,255,0.9);
-      padding: 10px;
-      border-radius: 8px;
+// Vegetation selection
+function selectVegetation(type) {
+  currentVegType = type;
+
+  // Stop the previous line so the new type starts fresh
+  currentLine = null;
+
+  // Initialize storage for this type if needed
+  if (!lines[currentVegType]) lines[currentVegType] = [];
+
+  // Highlight the selected button
+  document.querySelectorAll('.button-bar button').forEach(btn => btn.classList.remove('highlight'));
+  const btnId = type === 'deadTree' ? 'btnDeadTree' : 'btn' + type.charAt(0).toUpperCase() + type.slice(1);
+  document.getElementById(btnId).classList.add('highlight');
+}
+
+// Add GPS point
+function addGPSPoint(lat, lng) {
+  if (!currentVegType) return; // no type selected
+
+  if (currentVegType === 'deadTree') {
+    // Place a dead tree marker (single click only)
+    const marker = L.marker([lat, lng]).addTo(map).bindPopup("Dead Tree");
+    deadTrees.push(marker);
+  } else {
+    // Draw line for selected vegetation type
+    if (!currentLine) {
+      currentLine = L.polyline([[lat, lng]], { color: vegColors[currentVegType], weight: 5 }).addTo(map);
+      lines[currentVegType].push(currentLine);
+    } else {
+      currentLine.addLatLng([lat, lng]);
     }
-    .button-bar button {
-      display: block;
-      margin: 5px 0;
-      padding: 8px;
-    }
-    .highlight { background-color: yellow; }
-  </style>
-</head>
-<body>
-  <div class="button-bar">
-    <button onclick="selectVegetation('grass')" id="btnGrass">Grass</button>
-    <button onclick="selectVegetation('brush')" id="btnBrush">Brush</button>
-    <button onclick="selectVegetation('deadTree')" id="btnDeadTree">Dead Tree</button>
-    <button onclick="saveKML()">Save KML</button>
-  </div>
-  <div id="map"></div>
-
-  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-  <script>
-    const map = L.map('map');
-    let currentVegType = null;
-    let currentLine = null;
-    let lines = {};
-    let deadTrees = [];
-    const vegColors = {
-      grass: 'green',
-      brush: 'orange',
-      deadTree: 'brown'
-    };
-
-    // Center map on GPS location
-    map.locate({ setView: true, maxZoom: 18 });
-    map.on('locationfound', (e) => {
-      L.marker(e.latlng).addTo(map).bindPopup("You are here").openPopup();
-    });
-
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19
-    }).addTo(map);
-
-    // Vegetation selection
-    function selectVegetation(type) {
-      currentVegType = type;
-      currentLine = null;
-
-      if (!lines[currentVegType]) lines[currentVegType] = [];
-
-      document.querySelectorAll('.button-bar button').forEach(btn => btn.classList.remove('highlight'));
-      const btnId = type === 'deadTree' ? 'btnDeadTree' : 'btn' + type.charAt(0).toUpperCase() + type.slice(1);
-      document.getElementById(btnId).classList.add('highlight');
-    }
-
-    // Add GPS point
-    function addGPSPoint(lat, lng) {
-      if (!currentVegType) return;
-
-      if (currentVegType === 'deadTree') {
-        const marker = L.marker([lat, lng]).addTo(map).bindPopup("Dead Tree");
-        deadTrees.push(marker);
-      } else {
-        if (!currentLine) {
-          currentLine = L.polyline([[lat, lng]], { color: vegColors[currentVegType], weight: 5 }).addTo(map);
-          lines[currentVegType].push(currentLine);
-        } else {
-          currentLine.addLatLng([lat, lng]);
-        }
-      }
-    }
-
-    // Example: add point on click (for testing)
-    map.on('click', function(e) {
-      addGPSPoint(e.latlng.lat, e.latlng.lng);
-    });
-
-    // Save to KML
-    function saveKML() {
-      let kml = `<?xml version="1.0" encoding="UTF-8"?>
-<kml xmlns="http://www.opengis.net/kml/2.2">
-<Document>\n`;
-
-      // Lines
-      for (let type in lines) {
-        lines[type].forEach(line => {
-          kml += `<Placemark><name>${type}</name><LineString><coordinates>\n`;
-          line.getLatLngs().forEach(pt => {
-            kml += `${pt.lng},${pt.lat},0 `;
-          });
-          kml += `</coordinates></LineString></Placemark>\n`;
-        });
-      }
-
-      // Dead trees
-      deadTrees.forEach(marker => {
-        const pt = marker.getLatLng();
-        kml += `<Placemark><name>Dead Tree</name><Point><coordinates>${pt.lng},${pt.lat},0</coordinates></Point></Placemark>\n`;
-      });
-
-      kml += `</Document></kml>`;
-
-      const blob = new Blob([kml], {type: 'application/vnd.google-earth.kml+xml'});
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'vegetation_map.kml';
-      a.click();
-      URL.revokeObjectURL(url);
-    }
-  </script>
-</body>
-</html>
+  }
+}
