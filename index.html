@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Vegetation Mapping – Final KML (Data URL Save)</title>
+<title>Vegetation Mapping – iPad Save KML</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <style>
   html, body { margin:0; padding:0; height:100%; }
@@ -47,7 +47,6 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   attribution:'&copy; OpenStreetMap contributors'
 }).addTo(map);
 
-// Request GPS but don't auto-center
 map.locate({
   watch: true,
   enableHighAccuracy: true,
@@ -133,12 +132,13 @@ document.getElementById('clearAll').onclick = () => {
   polylines=[]; markers=[]; userMarker=null;
 };
 
-// ---- Save KML using data: URL ----
+// ---- iPad-friendly Save KML ----
 function saveKML(){
   if (!polylines.length && !markers.length) {
     alert("Nothing to save. Draw a path or add a marker first.");
     return;
   }
+
   let kml = '<?xml version="1.0" encoding="UTF-8"?>\n' +
             '<kml xmlns="http://www.opengis.net/kml/2.2">\n<Document>\n';
 
@@ -159,15 +159,9 @@ function saveKML(){
 
   kml += '</Document></kml>';
 
-  const dataUrl = 'data:application/vnd.google-earth.kml+xml;charset=utf-8,' +
-                  encodeURIComponent(kml);
-
-  const a = document.createElement('a');
-  a.href = dataUrl;
-  a.download = 'vegetation.kml';
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
+  // Open in a new tab so Safari's Share > Save to Files can save it
+  const dataUrl = 'data:text/plain;charset=utf-8,' + encodeURIComponent(kml);
+  window.open(dataUrl, '_blank');
 }
 
 function colorToKML(c){
