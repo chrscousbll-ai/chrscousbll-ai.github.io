@@ -23,6 +23,11 @@
   <button id="clearLastBtn">Clear Last Line</button>
   <button id="clearAllBtn">Clear All Lines</button>
   <button id="saveBtn">Save</button>
+  <hr>
+  <button class="vegBtn" data-type="Light">Light</button>
+  <button class="vegBtn" data-type="Medium">Medium</button>
+  <button class="vegBtn" data-type="Heavy">Heavy</button>
+  <button class="vegBtn" data-type="Dead Tree">Dead Tree</button>
 </div>
 <div class="legend" id="legend"></div>
 
@@ -35,12 +40,12 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   maxZoom: 19
 }).addTo(map);
 
-// Vegetation types (restored to your custom setup)
+// Your custom vegetation types only
 const vegetationTypes = {
-  "Grass": "green",
-  "Shrub": "darkgreen",
-  "Dead Tree": "brown",
-  "Wetland": "blue"
+  "Light": "green",
+  "Medium": "orange",
+  "Heavy": "red",
+  "Dead Tree": "brown"
 };
 
 // Legend
@@ -54,7 +59,7 @@ for (let type in vegetationTypes) {
 // State
 let isRecording = false;
 let followGPS = false;
-let currentVegetation = "Grass";
+let currentVegetation = "Light";
 let points = [];
 let lines = [];
 let markerLayer = L.layerGroup().addTo(map);
@@ -90,11 +95,12 @@ document.getElementById('saveBtn').onclick = () => {
   dlAnchor.click();
 };
 
-// Change vegetation type
-function setVegetationType(type) {
-  currentVegetation = type;
-  // Only changes type, does NOT draw a line
-}
+// Vegetation type buttons
+document.querySelectorAll('.vegBtn').forEach(btn => {
+  btn.onclick = () => {
+    currentVegetation = btn.dataset.type;
+  };
+});
 
 // Add vegetation marker on click
 map.on('click', e => {
@@ -105,13 +111,21 @@ map.on('click', e => {
   marker.bindPopup(currentVegetation);
   points.push({lat: e.latlng.lat, lng: e.latlng.lng, type: currentVegetation});
 
+  // Only draw lines if recording and previous point is same type
   if (isRecording && points.length > 1) {
-    // Draw line only between consecutive points of same vegetation if recording
     let lastPoint = points[points.length-2];
     if (lastPoint.type === currentVegetation) {
       let line = L.polyline([ [lastPoint.lat, lastPoint.lng], [e.latlng.lat, e.latlng.lng] ], {color: vegetationTypes[currentVegetation]}).addTo(map);
       lines.push(line);
     }
+  }
+
+  // Dead Tree special behavior (like before): allow single-click deletion
+  if (currentVegetation === "Dead Tree") {
+    marker.on('click', () => {
+      markerLayer.removeLayer(marker);
+      points = points.filter(p => p.lat !== e.latlng.lat || p.lng !== e.latlng.lng);
+    });
   }
 });
 
