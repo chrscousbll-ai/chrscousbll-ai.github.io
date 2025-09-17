@@ -16,7 +16,7 @@
 </head>
 <body>
 <div id="map"></div>
-<div class="control-buttons" id="buttons">
+<div class="control-buttons">
   <button id="followBtn">Follow GPS</button>
   <button id="startBtn">Start Recording</button>
   <button id="stopBtn">Stop Recording</button>
@@ -98,11 +98,14 @@ document.getElementById('saveBtn').onclick = () => {
 };
 
 // Vegetation type buttons
-document.querySelectorAll('.vegBtn').forEach(btn => {
-  btn.onclick = () => {
-    currentVegetation = btn.dataset.type;
-  };
-});
+function setupVegButtons() {
+  document.querySelectorAll('.vegBtn').forEach(btn => {
+    btn.onclick = () => {
+      currentVegetation = btn.dataset.type;
+    };
+  });
+}
+setupVegButtons();
 
 // Add vegetation marker on map click
 map.on('click', e => {
