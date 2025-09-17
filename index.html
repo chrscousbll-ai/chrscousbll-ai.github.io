@@ -41,7 +41,7 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   maxZoom: 19
 }).addTo(map);
 
-// Vegetation types
+// Vegetation types and colors
 const vegetationTypes = {
   "Light": "green",
   "Medium": "orange",
@@ -66,29 +66,35 @@ let activeVegBtn = null;
 let points = [];
 let lines = [];
 let markerLayer = L.layerGroup().addTo(map);
+let gpsMarker = null;
+let currentLine = null;
 
-// Follow GPS
+// Follow GPS button
 document.getElementById('followBtn').onclick = () => {
   followGPS = !followGPS;
   document.getElementById('followBtn').innerText = followGPS ? "Following GPS" : "Follow GPS";
 };
 
-// Recording
-document.getElementById('startBtn').onclick = () => { isRecording = true; };
-document.getElementById('stopBtn').onclick = () => { isRecording = false; };
+// Start/Stop Recording
+document.getElementById('startBtn').onclick = () => { 
+  isRecording = true; 
+  currentLine = null; // Start a new line
+};
+document.getElementById('stopBtn').onclick = () => { 
+  isRecording = false; 
+  currentLine = null; 
+};
 
-// Clear
+// Clear lines
 document.getElementById('clearLastBtn').onclick = () => {
-  if (lines.length) {
-    map.removeLayer(lines.pop());
-  }
+  if (lines.length) map.removeLayer(lines.pop());
 };
 document.getElementById('clearAllBtn').onclick = () => {
   lines.forEach(l => map.removeLayer(l));
   lines = [];
 };
 
-// Save
+// Save GeoJSON
 document.getElementById('saveBtn').onclick = () => {
   let geojson = markerLayer.toGeoJSON();
   let dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(geojson));
@@ -98,70 +104,56 @@ document.getElementById('saveBtn').onclick = () => {
   dlAnchor.click();
 };
 
-// Vegetation button click handler
+// Vegetation buttons
 document.querySelectorAll('.vegBtn').forEach(btn => {
   btn.addEventListener('click', () => {
     currentVegetation = btn.dataset.type;
 
     // Highlight active button
     if (activeVegBtn) activeVegBtn.style.backgroundColor = '';
-    btn.style.backgroundColor = '#ddd'; // Highlight color
+    btn.style.backgroundColor = '#ddd';
     activeVegBtn = btn;
+
+    // Dead Tree: place marker at current GPS immediately
+    if (currentVegetation === "Dead Tree" && gpsMarker) {
+      const latlng = gpsMarker.getLatLng();
+      let marker = L.circleMarker(latlng, {
+        color: vegetationTypes["Dead Tree"],
+        radius: 6
+      }).addTo(markerLayer);
+      marker.bindPopup("Dead Tree");
+      points.push({lat: latlng.lat, lng: latlng.lng, type: "Dead Tree"});
+      marker.on('click', () => {
+        markerLayer.removeLayer(marker);
+        points = points.filter(p => p.lat !== latlng.lat || p.lng !== latlng.lng);
+      });
+    }
   });
 });
 
-// Map click for placing vegetation markers
-map.on('click', e => {
-  const lat = e.latlng.lat;
-  const lng = e.latlng.lng;
-
-  let marker = L.circleMarker([lat, lng], {
-    color: vegetationTypes[currentVegetation],
-    radius: 6
-  }).addTo(markerLayer);
-  marker.bindPopup(currentVegetation);
-
-  // Save point
-  points.push({lat, lng, type: currentVegetation});
-
-  // Draw line if recording and previous point same type (skip No Vegetation)
-  if (isRecording && points.length > 1 && currentVegetation !== "No Vegetation") {
-    const lastPoint = points[points.length-2];
-    if (lastPoint.type === currentVegetation) {
-      let line = L.polyline([[lastPoint.lat, lastPoint.lng], [lat, lng]], {
-        color: vegetationTypes[currentVegetation]
-      }).addTo(map);
-      lines.push(line);
-    }
-  }
-
-  // Dead Tree click-to-delete
-  if (currentVegetation === "Dead Tree") {
-    marker.on('click', () => {
-      markerLayer.removeLayer(marker);
-      points = points.filter(p => p.lat !== lat || p.lng !== lng);
-    });
-  }
-});
-
-// GPS tracking with live marker
-let gpsMarker = null;
+// GPS tracking with live marker and path recording
 if (navigator.geolocation) {
   navigator.geolocation.watchPosition(pos => {
     const latlng = [pos.coords.latitude, pos.coords.longitude];
 
-    if (!gpsMarker) {
-      gpsMarker = L.marker(latlng, {title: "You"}).addTo(map);
-    } else {
-      gpsMarker.setLatLng(latlng);
+    // Update GPS marker
+    if (!gpsMarker) gpsMarker = L.marker(latlng, {title:"You"}).addTo(map);
+    else gpsMarker.setLatLng(latlng);
+
+    if (followGPS) map.setView(latlng);
+
+    // Record path for non-Dead Tree types
+    if (isRecording && currentVegetation !== "Dead Tree") {
+      if (!currentLine) {
+        currentLine = L.polyline([latlng], {color: vegetationTypes[currentVegetation]}).addTo(map);
+        lines.push(currentLine);
+      } else {
+        currentLine.addLatLng(latlng);
+      }
+      points.push({lat: latlng[0], lng: latlng[1], type: currentVegetation});
     }
 
-    if (followGPS) {
-      map.setView(latlng);
-    }
-  }, err => {
-    console.warn("GPS error:", err);
-  }, {enableHighAccuracy:true});
+  }, err => console.warn("GPS error:", err), {enableHighAccuracy:true});
 }
 </script>
 </body>
