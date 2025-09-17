@@ -98,40 +98,42 @@ document.getElementById('saveBtn').onclick = () => {
 };
 
 // Vegetation type buttons
-function setupVegButtons() {
-  document.querySelectorAll('.vegBtn').forEach(btn => {
-    btn.onclick = () => {
-      currentVegetation = btn.dataset.type;
-    };
+document.querySelectorAll('.vegBtn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    currentVegetation = btn.dataset.type;
   });
-}
-setupVegButtons();
+});
 
-// Add vegetation marker on map click
+// Map click for adding vegetation points
 map.on('click', e => {
-  let marker = L.circleMarker(e.latlng, {
+  const lat = e.latlng.lat;
+  const lng = e.latlng.lng;
+
+  let marker = L.circleMarker([lat, lng], {
     color: vegetationTypes[currentVegetation],
     radius: 6
   }).addTo(markerLayer);
   marker.bindPopup(currentVegetation);
-  points.push({lat: e.latlng.lat, lng: e.latlng.lng, type: currentVegetation});
 
-  // Draw line if recording and previous point is same type (skip No Vegetation)
+  // Save point
+  points.push({lat, lng, type: currentVegetation});
+
+  // Draw line if recording and previous point same type (skip No Vegetation)
   if (isRecording && points.length > 1 && currentVegetation !== "No Vegetation") {
-    let lastPoint = points[points.length-2];
+    const lastPoint = points[points.length-2];
     if (lastPoint.type === currentVegetation) {
-      let line = L.polyline([[lastPoint.lat, lastPoint.lng], [e.latlng.lat, e.latlng.lng]], {
+      let line = L.polyline([[lastPoint.lat, lastPoint.lng], [lat, lng]], {
         color: vegetationTypes[currentVegetation]
       }).addTo(map);
       lines.push(line);
     }
   }
 
-  // Dead Tree behavior: click to delete
+  // Dead Tree deletion only on marker click
   if (currentVegetation === "Dead Tree") {
     marker.on('click', () => {
       markerLayer.removeLayer(marker);
-      points = points.filter(p => p.lat !== e.latlng.lat || p.lng !== e.latlng.lng);
+      points = points.filter(p => p.lat !== lat || p.lng !== lng);
     });
   }
 });
@@ -140,7 +142,7 @@ map.on('click', e => {
 let gpsMarker = null;
 if (navigator.geolocation) {
   navigator.geolocation.watchPosition(pos => {
-    let latlng = [pos.coords.latitude, pos.coords.longitude];
+    const latlng = [pos.coords.latitude, pos.coords.longitude];
 
     if (!gpsMarker) {
       gpsMarker = L.marker(latlng, {title: "You"}).addTo(map);
