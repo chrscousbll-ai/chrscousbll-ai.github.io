@@ -1,143 +1,144 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>Vegetation Mapping</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
-  <style>
-    #map { height: 100vh; }
-    .button-bar {
-      position: absolute;
-      top: 10px;
-      left: 10px;
-      z-index: 1000;
-      background: rgba(255,255,255,0.95);
-      padding: 10px;
-      border-radius: 12px;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.3);
-      max-height: 90vh;
-      overflow-y: auto;
-    }
-    .button-bar button {
-      display: block;
-      width: 160px;
-      margin: 5px 0;
-      padding: 8px;
-      font-size: 14px;
-      border: 1px solid #ccc;
-      border-radius: 8px;
-      background: #f5f5f5;
-      cursor: pointer;
-    }
-    .highlight { background-color: yellow; }
-  </style>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Vegetation Mapping – Final KML</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+  html, body { margin:0; padding:0; height:100%; }
+  #map { height:100%; width:100%; }
+  .control-bar {
+    position: absolute; top:10px; left:10px;
+    display:flex; flex-direction:column; gap:6px;
+    z-index:1000;
+  }
+  .btn {
+    background:#fff; border:1px solid #555; padding:6px 10px;
+    border-radius:6px; font-size:14px; cursor:pointer;
+  }
+  .btn.active { background:#0078ff; color:#fff; }
+</style>
 </head>
 <body>
-  <div class="button-bar">
-    <button onclick="selectVegetation('conifer')" id="btnConifer">Conifer</button>
-    <button onclick="selectVegetation('deciduous')" id="btnDeciduous">Deciduous</button>
-    <button onclick="selectVegetation('mixed')" id="btnMixed">Mixed</button>
-    <button onclick="selectVegetation('deadTree')" id="btnDeadTree">Dead Tree</button>
-    <button onclick="saveKML()">Save KML</button>
-  </div>
-  <div id="map"></div>
+<div id="map"></div>
 
-  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-  <script>
-    const map = L.map('map');
-    let currentVegType = null;
-    let currentLine = null;
-    let lines = {};
-    let deadTrees = [];
+<div class="control-bar">
+  <button class="btn veg" data-color="green">Light Veg</button>
+  <button class="btn veg" data-color="orange">Medium Veg</button>
+  <button class="btn veg" data-color="red">Heavy Veg</button>
+  <button class="btn" id="deadTree">Dead Tree</button>
+  <button class="btn" id="startStop">Start Recording</button>
+  <button class="btn" id="followGps">Follow GPS</button>
+  <button class="btn" id="saveKML">Save KML</button>
+  <button class="btn" id="clearLast">Clear Last Line</button>
+  <button class="btn" id="clearAll">Clear All</button>
+</div>
 
-    // Colors for your vegetation categories
-    const vegColors = {
-      conifer: 'green',
-      deciduous: 'blue',
-      mixed: 'orange',
-      deadTree: 'brown'
-    };
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/togeojson@0.16.0/dist/togeojson.umd.js"></script>
 
-    // Center map on GPS location
-    map.locate({ setView: true, maxZoom: 18 });
-    map.on('locationfound', (e) => {
-      L.marker(e.latlng).addTo(map).bindPopup("You are here").openPopup();
-    });
+<script>
+const map = L.map('map').fitWorld();
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+  maxZoom:19, attribution:'&copy; OpenStreetMap contributors'
+}).addTo(map);
 
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19
-    }).addTo(map);
+map.locate({setView:true, watch:true, enableHighAccuracy:true});
 
-    // Vegetation selection
-    function selectVegetation(type) {
-      currentVegType = type;
-      currentLine = null;
+let recording = false;
+let follow = false;
+let currentColor = null;
+let polyline = null;
+let polylines = [];
+let markers = [];
 
-      if (!lines[currentVegType]) lines[currentVegType] = [];
+function startNewLine(color) {
+  polyline = L.polyline([], {color: color, weight:4}).addTo(map);
+  polylines.push(polyline);
+}
 
-      // Highlight selected button
-      document.querySelectorAll('.button-bar button').forEach(btn => btn.classList.remove('highlight'));
-      const btnId = 'btn' + type.charAt(0).toUpperCase() + type.slice(1);
-      if (document.getElementById(btnId)) {
-        document.getElementById(btnId).classList.add('highlight');
-      }
-    }
+function toggleRecording() {
+  recording = !recording;
+  document.getElementById('startStop').textContent = recording ? 'Stop Recording' : 'Start Recording';
+  if (recording && currentColor) startNewLine(currentColor);
+}
 
-    // Add GPS point (manual click or GPS update)
-    function addGPSPoint(lat, lng) {
-      if (!currentVegType) return;
+function updatePosition(e) {
+  const latlng = e.latlng;
+  if (recording && polyline) polyline.addLatLng(latlng);
+  if (follow) map.panTo(latlng);
+}
+map.on('locationfound', updatePosition);
 
-      if (currentVegType === 'deadTree') {
-        const marker = L.marker([lat, lng]).addTo(map).bindPopup("Dead Tree");
-        deadTrees.push(marker);
-      } else {
-        if (!currentLine) {
-          currentLine = L.polyline([[lat, lng]], { color: vegColors[currentVegType], weight: 5 }).addTo(map);
-          lines[currentVegType].push(currentLine);
-        } else {
-          currentLine.addLatLng([lat, lng]);
-        }
-      }
-    }
+document.querySelectorAll('.veg').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('.veg').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    currentColor = btn.dataset.color;
+    if (recording) startNewLine(currentColor);
+  });
+});
 
-    // Example: manual click to add points (replace later with GPS)
-    map.on('click', function(e) {
-      addGPSPoint(e.latlng.lat, e.latlng.lng);
-    });
+document.getElementById('startStop').onclick = toggleRecording;
 
-    // Save to KML
-    function saveKML() {
-      let kml = `<?xml version="1.0" encoding="UTF-8"?>
-<kml xmlns="http://www.opengis.net/kml/2.2">
-<Document>\n`;
+document.getElementById('followGps').onclick = () => {
+  follow = !follow;
+  document.getElementById('followGps').classList.toggle('active', follow);
+};
 
-      // Lines
-      for (let type in lines) {
-        lines[type].forEach(line => {
-          kml += `<Placemark><name>${type}</name><LineString><coordinates>\n`;
-          line.getLatLngs().forEach(pt => {
-            kml += `${pt.lng},${pt.lat},0 `;
-          });
-          kml += `</coordinates></LineString></Placemark>\n`;
-        });
-      }
+document.getElementById('deadTree').onclick = () => {
+  if (!map.getCenter()) return;
+  const center = map.getCenter();
+  const icon = L.icon({
+    iconUrl:'https://cdn-icons-png.flaticon.com/512/616/616408.png',
+    iconSize:[24,24]
+  });
+  const marker = L.marker(center,{icon:icon}).addTo(map);
+  markers.push(marker);
+};
 
-      // Dead trees
-      deadTrees.forEach(marker => {
-        const pt = marker.getLatLng();
-        kml += `<Placemark><name>Dead Tree</name><Point><coordinates>${pt.lng},${pt.lat},0</coordinates></Point></Placemark>\n`;
-      });
+document.getElementById('clearLast').onclick = () => {
+  const last = polylines.pop();
+  if (last) map.removeLayer(last);
+};
 
-      kml += `</Document></kml>`;
+document.getElementById('clearAll').onclick = () => {
+  polylines.forEach(l=>map.removeLayer(l));
+  markers.forEach(m=>map.removeLayer(m));
+  polylines=[]; markers=[];
+};
 
-      const blob = new Blob([kml], {type: 'application/vnd.google-earth.kml+xml'});
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'vegetation_map.kml';
-      a.click();
-      URL.revokeObjectURL(url);
-    }
-  </script>
+function saveKML(){
+  // Build simple KML
+  let kml = `<?xml version="1.0" encoding="UTF-8"?>\n<kml xmlns="http://www.opengis.net/kml/2.2">\n<Document>\n`;
+  polylines.forEach((line,i)=>{
+    const coords = line.getLatLngs().map(ll=>`${ll.lng},${ll.lat},0`).join(' ');
+    kml += `<Placemark><name>Path ${i+1}</name><Style><LineStyle><color>${colorToKML(line.options.color)}</color><width>4</width></LineStyle></Style><LineString><coordinates>${coords}</coordinates></LineString></Placemark>\n`;
+  });
+  markers.forEach((m,i)=>{
+    const ll = m.getLatLng();
+    kml += `<Placemark><name>Dead Tree ${i+1}</name><Point><coordinates>${ll.lng},${ll.lat},0</coordinates></Point></Placemark>\n`;
+  });
+  kml += `</Document></kml>`;
+  const blob = new Blob([kml],{type:'application/vnd.google-earth.kml+xml'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'vegetation.kml';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function colorToKML(c){
+  // KML uses aabbggrr
+  const ctx = document.createElement('canvas').getContext('2d');
+  ctx.fillStyle = c;
+  const rgb = ctx.fillStyle.match(/\d+/g).map(Number);
+  return `ff${toHex(rgb[2])}${toHex(rgb[1])}${toHex(rgb[0])}`;
+}
+function toHex(n){ return n.toString(16).padStart(2,'0'); }
+
+document.getElementById('saveKML').onclick = saveKML;
+</script>
 </body>
 </html>
