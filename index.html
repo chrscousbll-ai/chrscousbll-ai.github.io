@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Vegetation Mapping – KML Save Fix</title>
+<title>Vegetation Mapping – GPS & KML Fix</title>
 
 <!-- Leaflet CSS -->
 <link
@@ -25,7 +25,7 @@
   .control-buttons button {
     display: block;
     margin: 4px 0;
-    width: 140px;
+    width: 150px;
     padding: 6px;
   }
 </style>
@@ -44,17 +44,68 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
 /* -------------------- Map Setup -------------------- */
-const map = L.map('map', { center: [44.8, -68.9], zoom: 13 });
+const map = L.map('map').setView([44.8, -68.9], 13);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-  maxZoom: 19,
+  maxZoom: 19
 }).addTo(map);
 
 let recording = false;
 let currentLine = [];
 let lines = [];
 let deadTrees = [];
+let lastPosition = null;
+let gpsMarker = null;
 
-/* -------------------- Recording Logic -------------------- */
+/* -------------------- GPS Handling -------------------- */
+function startGPS() {
+  if (!navigator.geolocation) {
+    alert("Geolocation is not supported by this browser.");
+    return;
+  }
+
+  navigator.geolocation.watchPosition(
+    pos => {
+      const lat = pos.coords.latitude;
+      const lng = pos.coords.longitude;
+      const accuracy = pos.coords.accuracy;
+
+      const newPos = [lat, lng];
+
+      // Filter out wild jumps (>50 m)
+      if (lastPosition) {
+        const dist = map.distance(lastPosition, newPos);
+        if (dist > 50) return;
+      }
+      lastPosition = newPos;
+
+      // Update/Place current GPS marker
+      if (!gpsMarker) {
+        gpsMarker = L.circleMarker(newPos, {
+          radius: 6,
+          color: 'blue',
+          fillColor: '#00f',
+          fillOpacity: 0.7
+        }).addTo(map);
+      } else {
+        gpsMarker.setLatLng(newPos);
+      }
+
+      if (recording) {
+        currentLine.push(newPos);
+        L.polyline([newPos], { color: 'green' }).addTo(map);
+      }
+    },
+    err => console.error("GPS error:", err),
+    {
+      enableHighAccuracy: true,
+      maximumAge: 0,
+      timeout: 10000
+    }
+  );
+}
+startGPS();
+
+/* -------------------- Recording -------------------- */
 function startRecording() {
   if (!recording) {
     currentLine = [];
@@ -66,22 +117,14 @@ function stopRecording() {
   recording = false;
 }
 
-/* simulate GPS updates every 3s for demo */
-setInterval(() => {
-  if (recording) {
-    const c = map.getCenter();
-    const offset = (Math.random() - 0.5) * 0.001;
-    const latlng = [c.lat + offset, c.lng + offset];
-    currentLine.push(latlng);
-    L.polyline([latlng], { color: 'green' }).addTo(map);
-  }
-}, 3000);
-
 /* -------------------- Dead Tree Marker -------------------- */
 function addDeadTree() {
-  const c = map.getCenter();
-  L.marker(c, { title: "Dead Tree" }).addTo(map);
-  deadTrees.push(c);
+  if (!lastPosition) {
+    alert("No GPS fix yet.");
+    return;
+  }
+  L.marker(lastPosition, { title: "Dead Tree" }).addTo(map);
+  deadTrees.push(lastPosition);
 }
 
 /* -------------------- KML Export -------------------- */
@@ -93,7 +136,6 @@ function generateKML() {
   let kml = `<?xml version="1.0" encoding="UTF-8"?>\n`;
   kml += `<kml xmlns="http://www.opengis.net/kml/2.2">\n<Document>\n`;
 
-  // Lines
   lines.forEach((line, idx) => {
     if (line.length > 1) {
       kml += `<Placemark><name>Path ${idx+1}</name>\n`;
@@ -102,7 +144,6 @@ function generateKML() {
     }
   });
 
-  // Dead Trees
   deadTrees.forEach((pt, idx) => {
     kml += `<Placemark><name>Dead Tree ${idx+1}</name>\n`;
     kml += `<Point><coordinates>${pt[1]},${pt[0]},0</coordinates></Point>\n`;
@@ -115,16 +156,12 @@ function generateKML() {
 
 function saveKML() {
   const kmlString = generateKML();
-  console.log("Generated KML:", kmlString); // debugging
-
-  if (!kmlString || kmlString.trim() === '') {
+  if (!kmlString.trim()) {
     alert("No data to save!");
     return;
   }
-
   const blob = new Blob([kmlString], { type: 'application/vnd.google-earth.kml+xml' });
   const url  = URL.createObjectURL(blob);
-
   const link = document.createElement('a');
   link.href = url;
   link.download = 'vegetation-map.kml';
