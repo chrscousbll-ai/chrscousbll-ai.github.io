@@ -3,13 +3,12 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Vegetation Mapping – GPS & KML Fix</title>
+<title>Vegetation Mapping – Full Controls</title>
 
 <!-- Leaflet CSS -->
-<link
-  rel="stylesheet"
-  href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-/>
+<link rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+
 <style>
   html, body, #map { height: 100%; margin: 0; }
   .control-buttons {
@@ -25,17 +24,29 @@
   .control-buttons button {
     display: block;
     margin: 4px 0;
-    width: 150px;
+    width: 160px;
     padding: 6px;
+  }
+  .active-btn {
+    background: #4caf50;
+    color: #fff;
   }
 </style>
 </head>
 <body>
 
 <div id="map"></div>
+
 <div class="control-buttons">
   <button id="startBtn">Start Recording</button>
   <button id="stopBtn">Stop Recording</button>
+
+  <!-- Vegetation Type Buttons -->
+  <button id="lightBtn">Light Vegetation</button>
+  <button id="moderateBtn">Moderate Vegetation</button>
+  <button id="heavyBtn">Heavy Vegetation</button>
+  <button id="noneBtn">No Vegetation</button>
+
   <button id="deadTreeBtn">Dead Tree Marker</button>
   <button id="saveBtn">Save KML</button>
 </div>
@@ -50,11 +61,12 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
 }).addTo(map);
 
 let recording = false;
-let currentLine = [];
-let lines = [];
+let currentLine = null;
+let lines = [];            // array of {color, coords[]}
 let deadTrees = [];
 let lastPosition = null;
 let gpsMarker = null;
+let currentColor = 'green';
 
 /* -------------------- GPS Handling -------------------- */
 function startGPS() {
@@ -67,18 +79,15 @@ function startGPS() {
     pos => {
       const lat = pos.coords.latitude;
       const lng = pos.coords.longitude;
-      const accuracy = pos.coords.accuracy;
-
       const newPos = [lat, lng];
 
-      // Filter out wild jumps (>50 m)
       if (lastPosition) {
         const dist = map.distance(lastPosition, newPos);
-        if (dist > 50) return;
+        if (dist > 50) return; // filter wild jumps
       }
       lastPosition = newPos;
 
-      // Update/Place current GPS marker
+      // Show/Update GPS marker
       if (!gpsMarker) {
         gpsMarker = L.circleMarker(newPos, {
           radius: 6,
@@ -90,17 +99,14 @@ function startGPS() {
         gpsMarker.setLatLng(newPos);
       }
 
-      if (recording) {
-        currentLine.push(newPos);
-        L.polyline([newPos], { color: 'green' }).addTo(map);
+      // If recording, add to current polyline
+      if (recording && currentLine) {
+        currentLine.coords.push(newPos);
+        L.polyline([newPos], { color: currentColor }).addTo(map);
       }
     },
     err => console.error("GPS error:", err),
-    {
-      enableHighAccuracy: true,
-      maximumAge: 0,
-      timeout: 10000
-    }
+    { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 }
   );
 }
 startGPS();
@@ -108,13 +114,19 @@ startGPS();
 /* -------------------- Recording -------------------- */
 function startRecording() {
   if (!recording) {
-    currentLine = [];
+    currentLine = { color: currentColor, coords: [] };
     lines.push(currentLine);
     recording = true;
   }
 }
-function stopRecording() {
-  recording = false;
+function stopRecording() { recording = false; }
+
+/* -------------------- Vegetation Color -------------------- */
+function setVegColor(color, btnId) {
+  currentColor = color;
+  // highlight the active button
+  document.querySelectorAll('.veg-btn').forEach(b => b.classList.remove('active-btn'));
+  document.getElementById(btnId).classList.add('active-btn');
 }
 
 /* -------------------- Dead Tree Marker -------------------- */
@@ -137,9 +149,10 @@ function generateKML() {
   kml += `<kml xmlns="http://www.opengis.net/kml/2.2">\n<Document>\n`;
 
   lines.forEach((line, idx) => {
-    if (line.length > 1) {
+    if (line.coords.length > 1) {
       kml += `<Placemark><name>Path ${idx+1}</name>\n`;
-      kml += `<LineString><coordinates>${coordsToKml(line)}</coordinates></LineString>\n`;
+      kml += `<Style><LineStyle><color>${colorToKml(line.color)}</color><width>4</width></LineStyle></Style>\n`;
+      kml += `<LineString><coordinates>${coordsToKml(line.coords)}</coordinates></LineString>\n`;
       kml += `</Placemark>\n`;
     }
   });
@@ -152,6 +165,17 @@ function generateKML() {
 
   kml += `</Document>\n</kml>`;
   return kml;
+}
+
+// Convert CSS color name to KML hex (aabbggrr)
+function colorToKml(c) {
+  const colors = {
+    green: 'ff00ff00',
+    orange: 'ff00a5ff',
+    red:   'ff0000ff',
+    gray:  'ff888888'
+  };
+  return colors[c] || 'ff00ff00';
 }
 
 function saveKML() {
@@ -176,6 +200,15 @@ document.getElementById('startBtn').addEventListener('click', startRecording);
 document.getElementById('stopBtn').addEventListener('click', stopRecording);
 document.getElementById('deadTreeBtn').addEventListener('click', addDeadTree);
 document.getElementById('saveBtn').addEventListener('click', saveKML);
+
+// Vegetation buttons
+['light','moderate','heavy','none'].forEach(type => {
+  const id = type + 'Btn';
+  const color = {light:'green', moderate:'orange', heavy:'red', none:'gray'}[type];
+  const btn = document.getElementById(id);
+  btn.classList.add('veg-btn');
+  btn.addEventListener('click', () => setVegColor(color, id));
+});
 </script>
 </body>
 </html>
