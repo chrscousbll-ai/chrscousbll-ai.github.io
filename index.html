@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Vegetation Mapping – Continuous Paths</title>
+<title>Vegetation Mapping – Follow GPS Restored</title>
 
 <link rel="stylesheet"
       href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
@@ -45,6 +45,7 @@
   <button id="noneBtn">No Vegetation</button>
 
   <button id="deadTreeBtn">Dead Tree Marker</button>
+  <button id="followBtn">Follow GPS</button>
   <button id="saveBtn">Save KML</button>
 </div>
 
@@ -62,17 +63,15 @@ let deadTrees = [];
 let lastPosition = null;
 let gpsMarker = null;
 let currentColor = 'green';
+let followGPS = false;
 
 /* -------- Vegetation color selection -------- */
 function setVegColor(color, id) {
   currentColor = color;
   document.querySelectorAll('.veg-btn').forEach(b => b.classList.remove('active-btn'));
   document.getElementById(id).classList.add('active-btn');
-
-  // if currently recording, start a new segment for the new color
   if (recording) startNewSegment();
 }
-
 ['light','moderate','heavy','none'].forEach(type => {
   const id = type + 'Btn';
   const color = {light:'green', moderate:'orange', heavy:'red', none:'gray'}[type];
@@ -90,7 +89,6 @@ function startNewSegment() {
   };
   segments.push(currentSegment);
 }
-
 function startRecording() {
   if (!recording) {
     recording = true;
@@ -98,7 +96,6 @@ function startRecording() {
   }
 }
 function stopRecording() { recording = false; }
-
 document.getElementById('startBtn').addEventListener('click', startRecording);
 document.getElementById('stopBtn').addEventListener('click', stopRecording);
 
@@ -109,6 +106,13 @@ function addDeadTree() {
   deadTrees.push(lastPosition);
 }
 document.getElementById('deadTreeBtn').addEventListener('click', addDeadTree);
+
+/* -------- Follow GPS -------- */
+document.getElementById('followBtn').addEventListener('click', () => {
+  followGPS = !followGPS;
+  document.getElementById('followBtn').classList.toggle('active-btn', followGPS);
+  if (followGPS && lastPosition) map.setView(lastPosition);
+});
 
 /* -------- GPS watch -------- */
 navigator.geolocation.watchPosition(
@@ -130,6 +134,8 @@ navigator.geolocation.watchPosition(
     } else {
       gpsMarker.setLatLng(newPos);
     }
+
+    if (followGPS) map.setView(newPos);
 
     if (recording && currentSegment) {
       currentSegment.coords.push(newPos);
