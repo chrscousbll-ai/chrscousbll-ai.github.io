@@ -3,12 +3,10 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Vegetation Mapping – Full Controls</title>
+<title>Vegetation Mapping – Continuous Paths</title>
 
-<!-- Leaflet CSS -->
 <link rel="stylesheet"
       href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-
 <style>
   html, body, #map { height: 100%; margin: 0; }
   .control-buttons {
@@ -41,7 +39,6 @@
   <button id="startBtn">Start Recording</button>
   <button id="stopBtn">Stop Recording</button>
 
-  <!-- Vegetation Type Buttons -->
   <button id="lightBtn">Light Vegetation</button>
   <button id="moderateBtn">Moderate Vegetation</button>
   <button id="heavyBtn">Heavy Vegetation</button>
@@ -51,123 +48,102 @@
   <button id="saveBtn">Save KML</button>
 </div>
 
-<!-- Leaflet JS -->
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-/* -------------------- Map Setup -------------------- */
 const map = L.map('map').setView([44.8, -68.9], 13);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   maxZoom: 19
 }).addTo(map);
 
 let recording = false;
-let currentLine = null;
-let lines = [];            // array of {color, coords[]}
+let segments = [];   // each: {color, coords[], poly}
+let currentSegment = null;
 let deadTrees = [];
 let lastPosition = null;
 let gpsMarker = null;
 let currentColor = 'green';
 
-/* -------------------- GPS Handling -------------------- */
-function startGPS() {
-  if (!navigator.geolocation) {
-    alert("Geolocation is not supported by this browser.");
-    return;
-  }
+/* -------- Vegetation color selection -------- */
+function setVegColor(color, id) {
+  currentColor = color;
+  document.querySelectorAll('.veg-btn').forEach(b => b.classList.remove('active-btn'));
+  document.getElementById(id).classList.add('active-btn');
 
-  navigator.geolocation.watchPosition(
-    pos => {
-      const lat = pos.coords.latitude;
-      const lng = pos.coords.longitude;
-      const newPos = [lat, lng];
-
-      if (lastPosition) {
-        const dist = map.distance(lastPosition, newPos);
-        if (dist > 50) return; // filter wild jumps
-      }
-      lastPosition = newPos;
-
-      // Show/Update GPS marker
-      if (!gpsMarker) {
-        gpsMarker = L.circleMarker(newPos, {
-          radius: 6,
-          color: 'blue',
-          fillColor: '#00f',
-          fillOpacity: 0.7
-        }).addTo(map);
-      } else {
-        gpsMarker.setLatLng(newPos);
-      }
-
-      // If recording, add to current polyline
-      if (recording && currentLine) {
-        currentLine.coords.push(newPos);
-        L.polyline([newPos], { color: currentColor }).addTo(map);
-      }
-    },
-    err => console.error("GPS error:", err),
-    { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 }
-  );
+  // if currently recording, start a new segment for the new color
+  if (recording) startNewSegment();
 }
-startGPS();
 
-/* -------------------- Recording -------------------- */
+['light','moderate','heavy','none'].forEach(type => {
+  const id = type + 'Btn';
+  const color = {light:'green', moderate:'orange', heavy:'red', none:'gray'}[type];
+  const btn = document.getElementById(id);
+  btn.classList.add('veg-btn');
+  btn.addEventListener('click', () => setVegColor(color, id));
+});
+
+/* -------- Recording controls -------- */
+function startNewSegment() {
+  currentSegment = {
+    color: currentColor,
+    coords: [],
+    poly: L.polyline([], { color: currentColor }).addTo(map)
+  };
+  segments.push(currentSegment);
+}
+
 function startRecording() {
   if (!recording) {
-    currentLine = { color: currentColor, coords: [] };
-    lines.push(currentLine);
     recording = true;
+    startNewSegment();
   }
 }
 function stopRecording() { recording = false; }
 
-/* -------------------- Vegetation Color -------------------- */
-function setVegColor(color, btnId) {
-  currentColor = color;
-  // highlight the active button
-  document.querySelectorAll('.veg-btn').forEach(b => b.classList.remove('active-btn'));
-  document.getElementById(btnId).classList.add('active-btn');
-}
+document.getElementById('startBtn').addEventListener('click', startRecording);
+document.getElementById('stopBtn').addEventListener('click', stopRecording);
 
-/* -------------------- Dead Tree Marker -------------------- */
+/* -------- Dead tree markers -------- */
 function addDeadTree() {
-  if (!lastPosition) {
-    alert("No GPS fix yet.");
-    return;
-  }
+  if (!lastPosition) { alert("No GPS fix yet."); return; }
   L.marker(lastPosition, { title: "Dead Tree" }).addTo(map);
   deadTrees.push(lastPosition);
 }
+document.getElementById('deadTreeBtn').addEventListener('click', addDeadTree);
 
-/* -------------------- KML Export -------------------- */
-function generateKML() {
-  function coordsToKml(coords) {
-    return coords.map(pt => `${pt[1]},${pt[0]},0`).join(' ');
-  }
+/* -------- GPS watch -------- */
+navigator.geolocation.watchPosition(
+  pos => {
+    const lat = pos.coords.latitude;
+    const lng = pos.coords.longitude;
+    const newPos = [lat, lng];
 
-  let kml = `<?xml version="1.0" encoding="UTF-8"?>\n`;
-  kml += `<kml xmlns="http://www.opengis.net/kml/2.2">\n<Document>\n`;
-
-  lines.forEach((line, idx) => {
-    if (line.coords.length > 1) {
-      kml += `<Placemark><name>Path ${idx+1}</name>\n`;
-      kml += `<Style><LineStyle><color>${colorToKml(line.color)}</color><width>4</width></LineStyle></Style>\n`;
-      kml += `<LineString><coordinates>${coordsToKml(line.coords)}</coordinates></LineString>\n`;
-      kml += `</Placemark>\n`;
+    if (lastPosition) {
+      const dist = map.distance(lastPosition, newPos);
+      if (dist > 50) return;
     }
-  });
+    lastPosition = newPos;
 
-  deadTrees.forEach((pt, idx) => {
-    kml += `<Placemark><name>Dead Tree ${idx+1}</name>\n`;
-    kml += `<Point><coordinates>${pt[1]},${pt[0]},0</coordinates></Point>\n`;
-    kml += `</Placemark>\n`;
-  });
+    if (!gpsMarker) {
+      gpsMarker = L.circleMarker(newPos, {
+        radius: 6, color: 'blue', fillColor: '#00f', fillOpacity: 0.7
+      }).addTo(map);
+    } else {
+      gpsMarker.setLatLng(newPos);
+    }
 
-  kml += `</Document>\n</kml>`;
-  return kml;
+    if (recording && currentSegment) {
+      currentSegment.coords.push(newPos);
+      currentSegment.poly.addLatLng(newPos);
+    }
+  },
+  err => console.error("GPS error:", err),
+  { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 }
+);
+
+/* -------- KML Export -------- */
+function coordsToKml(coords) {
+  return coords.map(pt => `${pt[1]},${pt[0]},0`).join(' ');
 }
-
-// Convert CSS color name to KML hex (aabbggrr)
 function colorToKml(c) {
   const colors = {
     green: 'ff00ff00',
@@ -177,38 +153,38 @@ function colorToKml(c) {
   };
   return colors[c] || 'ff00ff00';
 }
+function generateKML() {
+  let kml = `<?xml version="1.0" encoding="UTF-8"?>\n<kml xmlns="http://www.opengis.net/kml/2.2">\n<Document>\n`;
 
+  segments.forEach((seg, i) => {
+    if (seg.coords.length > 1) {
+      kml += `<Placemark><name>Path ${i+1}</name>\n`;
+      kml += `<Style><LineStyle><color>${colorToKml(seg.color)}</color><width>4</width></LineStyle></Style>\n`;
+      kml += `<LineString><coordinates>${coordsToKml(seg.coords)}</coordinates></LineString>\n</Placemark>\n`;
+    }
+  });
+
+  deadTrees.forEach((pt, i) => {
+    kml += `<Placemark><name>Dead Tree ${i+1}</name>\n<Point><coordinates>${pt[1]},${pt[0]},0</coordinates></Point>\n</Placemark>\n`;
+  });
+
+  kml += `</Document>\n</kml>`;
+  return kml;
+}
 function saveKML() {
-  const kmlString = generateKML();
-  if (!kmlString.trim()) {
-    alert("No data to save!");
-    return;
-  }
-  const blob = new Blob([kmlString], { type: 'application/vnd.google-earth.kml+xml' });
-  const url  = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = 'vegetation-map.kml';
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
+  const kml = generateKML();
+  if (!kml.trim()) { alert("No data to save!"); return; }
+  const blob = new Blob([kml], { type: 'application/vnd.google-earth.kml+xml' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'vegetation-map.kml';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
   URL.revokeObjectURL(url);
 }
-
-/* -------------------- Button Hooks -------------------- */
-document.getElementById('startBtn').addEventListener('click', startRecording);
-document.getElementById('stopBtn').addEventListener('click', stopRecording);
-document.getElementById('deadTreeBtn').addEventListener('click', addDeadTree);
 document.getElementById('saveBtn').addEventListener('click', saveKML);
-
-// Vegetation buttons
-['light','moderate','heavy','none'].forEach(type => {
-  const id = type + 'Btn';
-  const color = {light:'green', moderate:'orange', heavy:'red', none:'gray'}[type];
-  const btn = document.getElementById(id);
-  btn.classList.add('veg-btn');
-  btn.addEventListener('click', () => setVegColor(color, id));
-});
 </script>
 </body>
 </html>
