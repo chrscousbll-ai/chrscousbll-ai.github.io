@@ -3,12 +3,13 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Vegetation Mapping – Follow GPS Restored</title>
+<title>Vegetation Mapping – Recording Indicator</title>
 
 <link rel="stylesheet"
       href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <style>
   html, body, #map { height: 100%; margin: 0; }
+
   .control-buttons {
     position: absolute;
     top: 10px;
@@ -29,11 +30,28 @@
     background: #4caf50;
     color: #fff;
   }
+
+  /* Recording banner */
+  #recordingIndicator {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 1000;
+    padding: 6px 12px;
+    border-radius: 8px;
+    font-family: sans-serif;
+    font-weight: bold;
+    background: rgba(200,0,0,0.9);
+    color: #fff;
+    display: none;          /* hidden by default */
+  }
 </style>
 </head>
 <body>
 
 <div id="map"></div>
+
+<div id="recordingIndicator">● Recording</div>
 
 <div class="control-buttons">
   <button id="startBtn">Start Recording</button>
@@ -64,6 +82,7 @@ let lastPosition = null;
 let gpsMarker = null;
 let currentColor = 'green';
 let followGPS = false;
+const indicator = document.getElementById('recordingIndicator');
 
 /* -------- Vegetation color selection -------- */
 function setVegColor(color, id) {
@@ -93,9 +112,13 @@ function startRecording() {
   if (!recording) {
     recording = true;
     startNewSegment();
+    indicator.style.display = 'block';     // show banner
   }
 }
-function stopRecording() { recording = false; }
+function stopRecording() {
+  recording = false;
+  indicator.style.display = 'none';        // hide banner
+}
 document.getElementById('startBtn').addEventListener('click', startRecording);
 document.getElementById('stopBtn').addEventListener('click', stopRecording);
 
@@ -161,7 +184,6 @@ function colorToKml(c) {
 }
 function generateKML() {
   let kml = `<?xml version="1.0" encoding="UTF-8"?>\n<kml xmlns="http://www.opengis.net/kml/2.2">\n<Document>\n`;
-
   segments.forEach((seg, i) => {
     if (seg.coords.length > 1) {
       kml += `<Placemark><name>Path ${i+1}</name>\n`;
@@ -169,11 +191,9 @@ function generateKML() {
       kml += `<LineString><coordinates>${coordsToKml(seg.coords)}</coordinates></LineString>\n</Placemark>\n`;
     }
   });
-
   deadTrees.forEach((pt, i) => {
     kml += `<Placemark><name>Dead Tree ${i+1}</name>\n<Point><coordinates>${pt[1]},${pt[0]},0</coordinates></Point>\n</Placemark>\n`;
   });
-
   kml += `</Document>\n</kml>`;
   return kml;
 }
